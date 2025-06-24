@@ -41,36 +41,30 @@ const isNightTime = (time: string): boolean => {
 };
 
 const extractMSISDN = (data: any[]): string => {
-  // Look for MSISDN in the header rows (first 10 rows)
-  for (let i = 0; i < Math.min(10, data.length); i++) {
+  console.log('Looking for MSISDN in data:', data.slice(0, 15));
+  
+  // Look for MSISDN in the header rows (first 15 rows)
+  for (let i = 0; i < Math.min(15, data.length); i++) {
     const row = data[i];
     if (row && typeof row === 'object') {
-      // Check various possible keys for MSISDN
+      // Check all values in the row for MSISDN pattern
       for (const key in row) {
-        if (key && row[key] && typeof row[key] === 'string') {
-          const value = row[key].toString();
-          // Look for MSISDN pattern in the value
+        const value = row[key];
+        if (value && typeof value === 'string') {
+          // Look for "MSISDN : - 9886788340" pattern
           if (value.includes('MSISDN') && value.includes('-')) {
-            const match = value.match(/MSISDN\s*:\s*-?\s*(\d+)/);
-            if (match) return match[1];
+            const match = value.match(/MSISDN\s*:\s*-\s*(\d+)/);
+            if (match) {
+              console.log('Found MSISDN in header:', match[1]);
+              return match[1];
+            }
           }
-          // Direct number match
-          if (key.includes('MSISDN') || key.includes('TARGET') || key.includes('A PARTY')) {
-            const numberMatch = value.match(/\d{10,}/);
-            if (numberMatch) return numberMatch[0];
+          // Look for standalone number that could be MSISDN
+          if (value.match(/^\d{10}$/)) {
+            console.log('Found potential MSISDN:', value);
+            return value;
           }
         }
-      }
-    }
-  }
-  
-  // Fallback: look in actual data rows
-  for (let i = 10; i < data.length; i++) {
-    const row = data[i];
-    if (row && row['Target /A PARTY NUMBER']) {
-      const number = row['Target /A PARTY NUMBER'].toString();
-      if (number.match(/^\d{10,}$/)) {
-        return number;
       }
     }
   }
@@ -84,34 +78,74 @@ const parseCallDuration = (duration: string): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const findDataStartIndex = (data: any[]): number => {
+  console.log('Finding data start index in', data.length, 'rows');
+  
+  // Look for the header row that contains "Target /A PARTY NUMBER"
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (row && typeof row === 'object') {
+      // Check if this row contains the column headers
+      for (const key in row) {
+        if (key && key.includes('Target') && key.includes('PARTY')) {
+          console.log('Found header row at index:', i);
+          return i + 1; // Data starts after header row
+        }
+      }
+    }
+  }
+  
+  // Fallback: assume data starts at row 12
+  console.log('Using fallback data start index: 12');
+  return 12;
+};
+
 export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRData => {
   console.log('Processing CDR data:', { fileName, totalRows: rawData.length });
+  console.log('First 5 rows sample:', rawData.slice(0, 5));
   
   // Extract MSISDN from the header rows
   const msisdn = extractMSISDN(rawData);
   console.log('Extracted MSISDN:', msisdn);
   
-  // Skip header rows and find actual data starting from row 10 onwards
-  const dataStartIndex = Math.max(10, rawData.findIndex(row => 
-    row && 
-    row['Target /A PARTY NUMBER'] && 
-    row['Target /A PARTY NUMBER'] !== 'Target /A PARTY NUMBER' &&
-    row['Target /A PARTY NUMBER'].toString().match(/^\d+$/)
-  ));
-  
+  // Find where actual data starts
+  const dataStartIndex = findDataStartIndex(rawData);
   console.log('Data starts at index:', dataStartIndex);
   
-  // Filter valid data rows
-  const validData = rawData.slice(dataStartIndex).filter(row => 
-    row && 
-    row['Target /A PARTY NUMBER'] && 
-    row['Target /A PARTY NUMBER'] !== 'Target /A PARTY NUMBER' &&
-    row['Target /A PARTY NUMBER'].toString().match(/^\d+$/) &&
-    row['Call date'] // Make sure we have a call date
-  );
+  // Get the header row (row before data starts)
+  const headerRow = rawData[dataStartIndex - 1];
+  console.log('Header row:', headerRow);
+  
+  // Extract column names from header
+  const columnNames = headerRow ? Object.keys(headerRow) : [];
+  console.log('Column names found:', columnNames);
+  
+  // Filter valid data rows starting from dataStartIndex
+  const validData = [];
+  for (let i = dataStartIndex; i < rawData.length; i++) {
+    const row = rawData[i];
+    if (row && typeof row === 'object') {
+      // Check if row has actual data (not empty or header)
+      const hasData = Object.values(row).some(value => 
+        value && 
+        typeof value === 'string' && 
+        value.trim() !== '' && 
+        !value.includes('Target') &&
+        !value.includes('PARTY')
+      );
+      
+      if (hasData) {
+        validData.push(row);
+      }
+    }
+  }
 
   console.log('Valid data rows found:', validData.length);
-  console.log('Sample row:', validData[0]);
+  console.log('Sample valid row:', validData[0]);
+
+  if (validData.length === 0) {
+    console.warn('No valid data rows found, creating empty sheets');
+  }
 
   // Generate all sheets
   const summary = generateSummary(validData, msisdn);
@@ -122,6 +156,9 @@ export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRDa
   const cdatContacts = generateCDATContacts(validData, msisdn);
   const dayLocationAbstract = generateDayLocationAbstract(validData, msisdn);
   const nightLocationAbstract = generateNightLocationAbstract(validData, msisdn);
+
+  console.log('Generated summary:', summary);
+  console.log('Generated call details count:', callDetails.length);
 
   return {
     fileName,
@@ -137,15 +174,59 @@ export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRDa
   };
 };
 
+const getFieldValue = (row: any, fieldNames: string[]): string => {
+  for (const fieldName of fieldNames) {
+    if (row[fieldName] !== undefined && row[fieldName] !== null) {
+      return row[fieldName].toString();
+    }
+  }
+  return '';
+};
+
 const generateSummary = (data: any[], msisdn: string) => {
-  const inCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
-  const outCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
-  const inSMS = data.filter(row => row['Service Type']?.toLowerCase().includes('sms') && row['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
-  const outSMS = data.filter(row => row['Service Type']?.toLowerCase().includes('sms') && row['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
+  console.log('Generating summary for', data.length, 'records');
   
-  const totalDuration = data.reduce((sum, row) => sum + parseCallDuration(row['Call Duration']), 0);
+  if (data.length === 0) {
+    return [{
+      PHONE: msisdn,
+      OTHER: '',
+      'IN CALLS': 0,
+      'OUT CALLS': 0,
+      'TOT CALLS': 0,
+      'IN SMS': 0,
+      'OUT SMS': 0,
+      'TOT SMS': 0,
+      DUR: 0,
+      'FIRST CALL': '',
+      'LAST CALL': '',
+      STATE: '',
+      ADDRESS: ''
+    }];
+  }
+
+  const inCalls = data.filter(row => 
+    getFieldValue(row, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('incoming')
+  ).length;
   
-  const dates = data.map(row => row['Call date']).filter(Boolean).sort();
+  const outCalls = data.filter(row => 
+    getFieldValue(row, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('outgoing')
+  ).length;
+  
+  const inSMS = data.filter(row => 
+    getFieldValue(row, ['Service Type'])?.toLowerCase().includes('sms') && 
+    getFieldValue(row, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('incoming')
+  ).length;
+  
+  const outSMS = data.filter(row => 
+    getFieldValue(row, ['Service Type'])?.toLowerCase().includes('sms') && 
+    getFieldValue(row, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('outgoing')
+  ).length;
+  
+  const totalDuration = data.reduce((sum, row) => 
+    sum + parseCallDuration(getFieldValue(row, ['Call Duration'])), 0
+  );
+  
+  const dates = data.map(row => getFieldValue(row, ['Call date'])).filter(Boolean).sort();
   const firstCall = dates[0] || '';
   const lastCall = dates[dates.length - 1] || '';
 
@@ -161,43 +242,47 @@ const generateSummary = (data: any[], msisdn: string) => {
     DUR: totalDuration,
     'FIRST CALL': firstCall,
     'LAST CALL': lastCall,
-    STATE: data[0]?.['Roaming Network/Circle'] || '',
-    ADDRESS: data[0]?.['First BTS Location'] || ''
+    STATE: getFieldValue(data[0] || {}, ['Roaming Network/Circle']),
+    ADDRESS: getFieldValue(data[0] || {}, ['First BTS Location'])
   }];
 };
 
 const generateCallDetails = (data: any[], msisdn: string) => {
+  console.log('Generating call details for', data.length, 'records');
+  
   return data.map(row => ({
     PHONE: msisdn,
-    OTHER: row['B PARTY NUMBER'] || '',
+    OTHER: getFieldValue(row, ['B PARTY NUMBER']),
     'NICK NAME': '',
-    STARTTIME: `${row['Call date']} ${row['Call Initiation Time']}`,
-    DUR: parseCallDuration(row['Call Duration']),
-    TYPE: row['CALL_TYPE'] || '',
-    IMEI: row['IMEI'] || '',
-    IMSI: row['IMSI'] || '',
-    CELLID: row['First Cell Global Id'] || '',
-    ROAM_NW: row['Roaming Network/Circle'] || '',
-    'AREA DESCRIPTION': row['First BTS Location'] || '',
+    STARTTIME: `${getFieldValue(row, ['Call date'])} ${getFieldValue(row, ['Call Initiation Time'])}`,
+    DUR: parseCallDuration(getFieldValue(row, ['Call Duration'])),
+    TYPE: getFieldValue(row, ['CALL_TYPE', 'Call Type']),
+    IMEI: getFieldValue(row, ['IMEI']),
+    IMSI: getFieldValue(row, ['IMSI']),
+    CELLID: getFieldValue(row, ['First Cell Global Id']),
+    ROAM_NW: getFieldValue(row, ['Roaming Network/Circle']),
+    'AREA DESCRIPTION': getFieldValue(row, ['First BTS Location']),
     'LAT-LONG-AZM': ''
   }));
 };
 
 const generateNightCallDetails = (data: any[], msisdn: string) => {
-  const nightData = data.filter(row => isNightTime(row['Call Initiation Time']));
+  const nightData = data.filter(row => 
+    isNightTime(getFieldValue(row, ['Call Initiation Time']))
+  );
   
   return nightData.map((row, index) => ({
     'SL.No.': index + 1,
     PHONE: msisdn,
-    OTHER: row['B PARTY NUMBER'] || '',
-    STARTTIME: `${row['Call date']} ${row['Call Initiation Time']}`,
-    DUR: parseCallDuration(row['Call Duration']),
-    TYPE: row['CALL_TYPE'] || '',
-    IMEI: row['IMEI'] || '',
-    IMSI: row['IMSI'] || '',
-    CELLID: row['First Cell Global Id'] || '',
-    ROAM_NW: row['Roaming Network/Circle'] || '',
-    'AREA DESCRIPTION': row['First BTS Location'] || '',
+    OTHER: getFieldValue(row, ['B PARTY NUMBER']),
+    STARTTIME: `${getFieldValue(row, ['Call date'])} ${getFieldValue(row, ['Call Initiation Time'])}`,
+    DUR: parseCallDuration(getFieldValue(row, ['Call Duration'])),
+    TYPE: getFieldValue(row, ['CALL_TYPE', 'Call Type']),
+    IMEI: getFieldValue(row, ['IMEI']),
+    IMSI: getFieldValue(row, ['IMSI']),
+    CELLID: getFieldValue(row, ['First Cell Global Id']),
+    ROAM_NW: getFieldValue(row, ['Roaming Network/Circle']),
+    'AREA DESCRIPTION': getFieldValue(row, ['First BTS Location']),
     LAT: '',
     LONG: '',
     AZM: ''
@@ -205,20 +290,22 @@ const generateNightCallDetails = (data: any[], msisdn: string) => {
 };
 
 const generateDayCallDetails = (data: any[], msisdn: string) => {
-  const dayData = data.filter(row => !isNightTime(row['Call Initiation Time']));
+  const dayData = data.filter(row => 
+    !isNightTime(getFieldValue(row, ['Call Initiation Time']))
+  );
   
   return dayData.map((row, index) => ({
     'SL.No.': index + 1,
     PHONE: msisdn,
-    OTHER: row['B PARTY NUMBER'] || '',
-    STARTTIME: `${row['Call date']} ${row['Call Initiation Time']}`,
-    DUR: parseCallDuration(row['Call Duration']),
-    TYPE: row['CALL_TYPE'] || '',
-    IMEI: row['IMEI'] || '',
-    IMSI: row['IMSI'] || '',
-    CELLID: row['First Cell Global Id'] || '',
-    ROAM_NW: row['Roaming Network/Circle'] || '',
-    'AREA DESCRIPTION': row['First BTS Location'] || '',
+    OTHER: getFieldValue(row, ['B PARTY NUMBER']),
+    STARTTIME: `${getFieldValue(row, ['Call date'])} ${getFieldValue(row, ['Call Initiation Time'])}`,
+    DUR: parseCallDuration(getFieldValue(row, ['Call Duration'])),
+    TYPE: getFieldValue(row, ['CALL_TYPE', 'Call Type']),
+    IMEI: getFieldValue(row, ['IMEI']),
+    IMSI: getFieldValue(row, ['IMSI']),
+    CELLID: getFieldValue(row, ['First Cell Global Id']),
+    ROAM_NW: getFieldValue(row, ['Roaming Network/Circle']),
+    'AREA DESCRIPTION': getFieldValue(row, ['First BTS Location']),
     LAT: '',
     LONG: '',
     AZM: ''
@@ -227,7 +314,7 @@ const generateDayCallDetails = (data: any[], msisdn: string) => {
 
 const generateIMEISummary = (data: any[], msisdn: string) => {
   const imeiGroups = data.reduce((groups: any, row) => {
-    const imei = row['IMEI'] || 'Unknown';
+    const imei = getFieldValue(row, ['IMEI']) || 'Unknown';
     if (!groups[imei]) {
       groups[imei] = [];
     }
@@ -236,11 +323,17 @@ const generateIMEISummary = (data: any[], msisdn: string) => {
   }, {});
 
   return Object.entries(imeiGroups).map(([imei, records]: [string, any], index) => {
-    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
-    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
-    const totalDuration = records.reduce((sum: number, r: any) => sum + parseCallDuration(r['Call Duration']), 0);
+    const inCalls = records.filter((r: any) => 
+      getFieldValue(r, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('incoming')
+    ).length;
+    const outCalls = records.filter((r: any) => 
+      getFieldValue(r, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('outgoing')
+    ).length;
+    const totalDuration = records.reduce((sum: number, r: any) => 
+      sum + parseCallDuration(getFieldValue(r, ['Call Duration'])), 0
+    );
     
-    const dates = records.map((r: any) => r['Call date']).filter(Boolean).sort();
+    const dates = records.map((r: any) => getFieldValue(r, ['Call date'])).filter(Boolean).sort();
     const firstCall = dates[0] || '';
     const lastCall = dates[dates.length - 1] || '';
     
@@ -256,7 +349,7 @@ const generateIMEISummary = (data: any[], msisdn: string) => {
       'LAST CALL': lastCall,
       SIM_USED_DAYS: '',
       NAME: '',
-      ADDRESS: records[0]?.['First BTS Location'] || '',
+      ADDRESS: getFieldValue(records[0], ['First BTS Location']),
       ACT_DATE: '',
       LAST_UPDATED: ''
     };
@@ -265,7 +358,7 @@ const generateIMEISummary = (data: any[], msisdn: string) => {
 
 const generateCDATContacts = (data: any[], msisdn: string) => {
   const contactGroups = data.reduce((groups: any, row) => {
-    const other = row['B PARTY NUMBER'] || 'Unknown';
+    const other = getFieldValue(row, ['B PARTY NUMBER']) || 'Unknown';
     if (!groups[other]) {
       groups[other] = [];
     }
@@ -274,11 +367,17 @@ const generateCDATContacts = (data: any[], msisdn: string) => {
   }, {});
 
   return Object.entries(contactGroups).map(([other, records]: [string, any], index) => {
-    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
-    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
-    const totalDuration = records.reduce((sum: number, r: any) => sum + parseCallDuration(r['Call Duration']), 0);
+    const inCalls = records.filter((r: any) => 
+      getFieldValue(r, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('incoming')
+    ).length;
+    const outCalls = records.filter((r: any) => 
+      getFieldValue(r, ['CALL_TYPE', 'Call Type'])?.toLowerCase().includes('outgoing')
+    ).length;
+    const totalDuration = records.reduce((sum: number, r: any) => 
+      sum + parseCallDuration(getFieldValue(r, ['Call Duration'])), 0
+    );
     
-    const dates = records.map((r: any) => r['Call date']).filter(Boolean).sort();
+    const dates = records.map((r: any) => getFieldValue(r, ['Call date'])).filter(Boolean).sort();
     const firstCall = dates[0] || '';
     const lastCall = dates[dates.length - 1] || '';
     
@@ -292,16 +391,18 @@ const generateCDATContacts = (data: any[], msisdn: string) => {
       TOT_DUR: totalDuration,
       'FIRST CALL': firstCall,
       'LAST CALL': lastCall,
-      STATE: records[0]?.['Roaming Network/Circle'] || '',
-      ADDRESS: records[0]?.['First BTS Location'] || ''
+      STATE: getFieldValue(records[0], ['Roaming Network/Circle']),
+      ADDRESS: getFieldValue(records[0], ['First BTS Location'])
     };
   });
 };
 
 const generateDayLocationAbstract = (data: any[], msisdn: string) => {
-  const dayData = data.filter(row => !isNightTime(row['Call Initiation Time']));
+  const dayData = data.filter(row => 
+    !isNightTime(getFieldValue(row, ['Call Initiation Time']))
+  );
   const locationGroups = dayData.reduce((groups: any, row) => {
-    const cellId = row['First Cell Global Id'] || 'Unknown';
+    const cellId = getFieldValue(row, ['First Cell Global Id']) || 'Unknown';
     if (!groups[cellId]) {
       groups[cellId] = [];
     }
@@ -311,10 +412,10 @@ const generateDayLocationAbstract = (data: any[], msisdn: string) => {
 
   return Object.entries(locationGroups).map(([cellId, records]: [string, any]) => ({
     PHONE: msisdn,
-    DAYS: new Set(records.map((r: any) => r['Call date'])).size,
+    DAYS: new Set(records.map((r: any) => getFieldValue(r, ['Call date']))).size,
     CELLTOWERID: cellId,
     CALLS: records.length,
-    SITEADDRESS: records[0]?.['First BTS Location'] || '',
+    SITEADDRESS: getFieldValue(records[0], ['First BTS Location']),
     LAT: '',
     LONG: '',
     AZIMUTH: ''
@@ -322,9 +423,11 @@ const generateDayLocationAbstract = (data: any[], msisdn: string) => {
 };
 
 const generateNightLocationAbstract = (data: any[], msisdn: string) => {
-  const nightData = data.filter(row => isNightTime(row['Call Initiation Time']));
+  const nightData = data.filter(row => 
+    isNightTime(getFieldValue(row, ['Call Initiation Time']))
+  );
   const locationGroups = nightData.reduce((groups: any, row) => {
-    const cellId = row['First Cell Global Id'] || 'Unknown';
+    const cellId = getFieldValue(row, ['First Cell Global Id']) || 'Unknown';
     if (!groups[cellId]) {
       groups[cellId] = [];
     }
@@ -334,10 +437,10 @@ const generateNightLocationAbstract = (data: any[], msisdn: string) => {
 
   return Object.entries(locationGroups).map(([cellId, records]: [string, any]) => ({
     PHONE: msisdn,
-    DAYS: new Set(records.map((r: any) => r['Call date'])).size,  
+    DAYS: new Set(records.map((r: any) => getFieldValue(r, ['Call date']))).size,  
     CELLTOWERID: cellId,
     CALLS: records.length,
-    SITEADDRESS: records[0]?.['First BTS Location'] || '',
+    SITEADDRESS: getFieldValue(records[0], ['First BTS Location']),
     LAT: '',
     LONG: '',
     AZIMUTH: ''
