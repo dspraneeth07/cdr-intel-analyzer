@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,37 +15,22 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
   const generateExcelFile = (data: any) => {
     const workbook = XLSX.utils.book_new();
 
-    // Sheet 1: Summary
-    const summarySheet = XLSX.utils.json_to_sheet(data.summary);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, `SUMMARY OF ${data.msisdn}`);
+    // Shortened sheet names to comply with Excel's 31-character limit
+    const sheets = [
+      { name: `SUMMARY_${data.msisdn.slice(-4)}`, data: data.summary },
+      { name: `CALLDETAILS_${data.msisdn.slice(-4)}`, data: data.callDetails },
+      { name: `NIGHT_CALLS_${data.msisdn.slice(-4)}`, data: data.nightCallDetails },
+      { name: `DAY_CALLS_${data.msisdn.slice(-4)}`, data: data.dayCallDetails },
+      { name: `IMEI_SUMMARY_${data.msisdn.slice(-4)}`, data: data.imeiSummary },
+      { name: `CDAT_CONTACTS_${data.msisdn.slice(-4)}`, data: data.cdatContacts },
+      { name: `DAY_LOCATION_${data.msisdn.slice(-4)}`, data: data.dayLocationAbstract },
+      { name: `NIGHT_LOCATION_${data.msisdn.slice(-4)}`, data: data.nightLocationAbstract }
+    ];
 
-    // Sheet 2: Call Details
-    const callDetailsSheet = XLSX.utils.json_to_sheet(data.callDetails);
-    XLSX.utils.book_append_sheet(workbook, callDetailsSheet, `CALLDETAILS OF ${data.msisdn}`);
-
-    // Sheet 3: Night Call Details
-    const nightCallDetailsSheet = XLSX.utils.json_to_sheet(data.nightCallDetails);
-    XLSX.utils.book_append_sheet(workbook, nightCallDetailsSheet, `NIGHT CALLDETAILS OF ${data.msisdn}`);
-
-    // Sheet 4: Day Call Details
-    const dayCallDetailsSheet = XLSX.utils.json_to_sheet(data.dayCallDetails);
-    XLSX.utils.book_append_sheet(workbook, dayCallDetailsSheet, `DAY CALLDETAILS OF ${data.msisdn}`);
-
-    // Sheet 5: IMEI Summary
-    const imeiSummarySheet = XLSX.utils.json_to_sheet(data.imeiSummary);
-    XLSX.utils.book_append_sheet(workbook, imeiSummarySheet, `IMEI SUMMARY OF ${data.msisdn}`);
-
-    // Sheet 6: CDAT Contacts
-    const cdatContactsSheet = XLSX.utils.json_to_sheet(data.cdatContacts);
-    XLSX.utils.book_append_sheet(workbook, cdatContactsSheet, `CDAT CONTACTS OF ${data.msisdn}`);
-
-    // Sheet 7: Day Location Abstract
-    const dayLocationSheet = XLSX.utils.json_to_sheet(data.dayLocationAbstract);
-    XLSX.utils.book_append_sheet(workbook, dayLocationSheet, `DAY LOCATION ABSTRACT OF ${data.msisdn}`);
-
-    // Sheet 8: Night Location Abstract
-    const nightLocationSheet = XLSX.utils.json_to_sheet(data.nightLocationAbstract);
-    XLSX.utils.book_append_sheet(workbook, nightLocationSheet, `NIGHT LOCATION ABSTRACT OF ${data.msisdn}`);
+    sheets.forEach(sheet => {
+      const worksheet = XLSX.utils.json_to_sheet(sheet.data);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+    });
 
     return workbook;
   };

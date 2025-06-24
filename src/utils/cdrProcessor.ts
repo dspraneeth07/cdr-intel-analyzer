@@ -41,58 +41,86 @@ const isNightTime = (time: string): boolean => {
 };
 
 const extractMSISDN = (data: any[]): string => {
-  // Extract MSISDN from the first data row or header
-  for (const row of data) {
-    if (row['Target /A PARTY NUMBER'] || row['MSISDN']) {
-      return row['Target /A PARTY NUMBER'] || row['MSISDN'];
+  // Look for MSISDN in the header rows (first 10 rows)
+  for (let i = 0; i < Math.min(10, data.length); i++) {
+    const row = data[i];
+    if (row && typeof row === 'object') {
+      // Check various possible keys for MSISDN
+      for (const key in row) {
+        if (key && row[key] && typeof row[key] === 'string') {
+          const value = row[key].toString();
+          // Look for MSISDN pattern in the value
+          if (value.includes('MSISDN') && value.includes('-')) {
+            const match = value.match(/MSISDN\s*:\s*-?\s*(\d+)/);
+            if (match) return match[1];
+          }
+          // Direct number match
+          if (key.includes('MSISDN') || key.includes('TARGET') || key.includes('A PARTY')) {
+            const numberMatch = value.match(/\d{10,}/);
+            if (numberMatch) return numberMatch[0];
+          }
+        }
+      }
     }
   }
+  
+  // Fallback: look in actual data rows
+  for (let i = 10; i < data.length; i++) {
+    const row = data[i];
+    if (row && row['Target /A PARTY NUMBER']) {
+      const number = row['Target /A PARTY NUMBER'].toString();
+      if (number.match(/^\d{10,}$/)) {
+        return number;
+      }
+    }
+  }
+  
   return 'Unknown';
 };
 
 const parseCallDuration = (duration: string): number => {
   if (!duration || duration === '-') return 0;
-  const num = parseInt(duration);
+  const num = parseInt(duration.toString());
   return isNaN(num) ? 0 : num;
 };
 
 export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRData => {
-  console.log('Processing CDR data:', { fileName, rowCount: rawData.length });
+  console.log('Processing CDR data:', { fileName, totalRows: rawData.length });
   
-  // Extract MSISDN from the data
+  // Extract MSISDN from the header rows
   const msisdn = extractMSISDN(rawData);
+  console.log('Extracted MSISDN:', msisdn);
   
-  // Filter out header rows and empty rows
-  const validData = rawData.filter(row => 
+  // Skip header rows and find actual data starting from row 10 onwards
+  const dataStartIndex = Math.max(10, rawData.findIndex(row => 
+    row && 
     row['Target /A PARTY NUMBER'] && 
     row['Target /A PARTY NUMBER'] !== 'Target /A PARTY NUMBER' &&
-    row['Target /A PARTY NUMBER'].match(/^\d+$/)
+    row['Target /A PARTY NUMBER'].toString().match(/^\d+$/)
+  ));
+  
+  console.log('Data starts at index:', dataStartIndex);
+  
+  // Filter valid data rows
+  const validData = rawData.slice(dataStartIndex).filter(row => 
+    row && 
+    row['Target /A PARTY NUMBER'] && 
+    row['Target /A PARTY NUMBER'] !== 'Target /A PARTY NUMBER' &&
+    row['Target /A PARTY NUMBER'].toString().match(/^\d+$/) &&
+    row['Call date'] // Make sure we have a call date
   );
 
-  console.log('Valid data rows:', validData.length);
+  console.log('Valid data rows found:', validData.length);
+  console.log('Sample row:', validData[0]);
 
-  // Sheet 1: Summary
+  // Generate all sheets
   const summary = generateSummary(validData, msisdn);
-  
-  // Sheet 2: Call Details  
   const callDetails = generateCallDetails(validData, msisdn);
-  
-  // Sheet 3: Night Call Details
   const nightCallDetails = generateNightCallDetails(validData, msisdn);
-  
-  // Sheet 4: Day Call Details
   const dayCallDetails = generateDayCallDetails(validData, msisdn);
-  
-  // Sheet 5: IMEI Summary
   const imeiSummary = generateIMEISummary(validData, msisdn);
-  
-  // Sheet 6: CDAT Contacts
   const cdatContacts = generateCDATContacts(validData, msisdn);
-  
-  // Sheet 7: Day Location Abstract
   const dayLocationAbstract = generateDayLocationAbstract(validData, msisdn);
-  
-  // Sheet 8: Night Location Abstract
   const nightLocationAbstract = generateNightLocationAbstract(validData, msisdn);
 
   return {
@@ -110,10 +138,10 @@ export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRDa
 };
 
 const generateSummary = (data: any[], msisdn: string) => {
-  const inCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase() === 'incoming').length;
-  const outCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase() === 'outgoing').length;
-  const inSMS = data.filter(row => row['Service Type']?.toLowerCase() === 'sms' && row['CALL_TYPE']?.toLowerCase() === 'incoming').length;
-  const outSMS = data.filter(row => row['Service Type']?.toLowerCase() === 'sms' && row['CALL_TYPE']?.toLowerCase() === 'outgoing').length;
+  const inCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
+  const outCalls = data.filter(row => row['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
+  const inSMS = data.filter(row => row['Service Type']?.toLowerCase().includes('sms') && row['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
+  const outSMS = data.filter(row => row['Service Type']?.toLowerCase().includes('sms') && row['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
   
   const totalDuration = data.reduce((sum, row) => sum + parseCallDuration(row['Call Duration']), 0);
   
@@ -208,8 +236,8 @@ const generateIMEISummary = (data: any[], msisdn: string) => {
   }, {});
 
   return Object.entries(imeiGroups).map(([imei, records]: [string, any], index) => {
-    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase() === 'incoming').length;
-    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase() === 'outgoing').length;
+    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
+    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
     const totalDuration = records.reduce((sum: number, r: any) => sum + parseCallDuration(r['Call Duration']), 0);
     
     const dates = records.map((r: any) => r['Call date']).filter(Boolean).sort();
@@ -246,8 +274,8 @@ const generateCDATContacts = (data: any[], msisdn: string) => {
   }, {});
 
   return Object.entries(contactGroups).map(([other, records]: [string, any], index) => {
-    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase() === 'incoming').length;
-    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase() === 'outgoing').length;
+    const inCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('incoming')).length;
+    const outCalls = records.filter((r: any) => r['CALL_TYPE']?.toLowerCase().includes('outgoing')).length;
     const totalDuration = records.reduce((sum: number, r: any) => sum + parseCallDuration(r['Call Duration']), 0);
     
     const dates = records.map((r: any) => r['Call date']).filter(Boolean).sort();
