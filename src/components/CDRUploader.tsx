@@ -139,8 +139,8 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
           dragActive 
-            ? 'border-blue-500 bg-blue-500/10' 
-            : 'border-slate-600 hover:border-slate-500'
+            ? 'border-blue-500 bg-blue-50' 
+            : 'border-blue-300 hover:border-blue-400 bg-blue-25'
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -148,14 +148,14 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
         onDrop={handleDrop}
       >
         <div className="flex flex-col items-center space-y-4">
-          <div className="p-4 bg-slate-700/50 rounded-full">
-            <Upload className="h-8 w-8 text-blue-400" />
+          <div className="p-4 bg-blue-100 rounded-full">
+            <Upload className="h-8 w-8 text-blue-600" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white mb-2">
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
               Drop CDR Files Here
             </h3>
-            <p className="text-slate-400 mb-4">
+            <p className="text-blue-600 mb-4">
               Or click to browse and select multiple CSV files
             </p>
           </div>
@@ -170,7 +170,7 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
           <Button 
             asChild 
             variant="outline" 
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            className="border-blue-300 text-blue-700 hover:bg-blue-50"
           >
             <label htmlFor="file-input" className="cursor-pointer">
               Browse Files
@@ -181,16 +181,16 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
 
       {/* File List */}
       {files.length > 0 && (
-        <Card className="bg-slate-800/30 border-slate-700">
+        <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4">
-            <h4 className="text-white font-medium mb-4">Selected Files ({files.length})</h4>
+            <h4 className="text-blue-900 font-medium mb-4">Selected Files ({files.length})</h4>
             <div className="space-y-2">
               {files.map((file, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
                   <div className="flex items-center space-x-3">
-                    <FileText className="h-4 w-4 text-blue-400" />
-                    <span className="text-sm text-white">{file.name}</span>
-                    <span className="text-xs text-slate-400">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm text-blue-900">{file.name}</span>
+                    <span className="text-xs text-blue-500">
                       ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </span>
                   </div>
@@ -198,7 +198,7 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
                     size="sm"
                     variant="ghost"
                     onClick={() => removeFile(index)}
-                    className="text-slate-400 hover:text-red-400"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -214,16 +214,16 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
         <Button 
           onClick={processFiles}
           disabled={files.length === 0 || isProcessing}
-          className="w-full bg-blue-600 hover:bg-blue-700"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg"
         >
           {isProcessing ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
               Processing Files...
             </>
           ) : (
             <>
-              <CheckCircle className="h-4 w-4 mr-2" />
+              <CheckCircle className="h-5 w-5 mr-3" />
               Process {files.length} File(s)
             </>
           )}
@@ -231,11 +231,11 @@ const CDRUploader: React.FC<CDRUploaderProps> = ({
 
         {isProcessing && (
           <div className="space-y-2">
-            <div className="flex justify-between text-sm text-slate-400">
+            <div className="flex justify-between text-sm text-blue-600">
               <span>Processing Progress</span>
               <span>{Math.round(uploadProgress)}%</span>
             </div>
-            <Progress value={uploadProgress} className="h-2" />
+            <Progress value={uploadProgress} className="h-3" />
           </div>
         )}
       </div>

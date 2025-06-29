@@ -1,35 +1,36 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Download, FileSpreadsheet, Shield, Activity } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Activity } from 'lucide-react';
 import CDRUploader from '@/components/CDRUploader';
-import ProcessingStatus from '@/components/ProcessingStatus';
 import BulkDownloader from '@/components/BulkDownloader';
 
 const Index = () => {
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [processedData, setProcessedData] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
       {/* Header */}
-      <div className="border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/50">
-        <div className="container mx-auto px-6 py-4">
+      <div className="border-b border-blue-200 bg-white/80 backdrop-blur-sm">
+        <div className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-4">
               <div className="p-2 bg-blue-600 rounded-lg">
-                <Shield className="h-6 w-6 text-white" />
+                <img 
+                  src="/lovable-uploads/267315df-bfd6-4db7-b92e-d2eaf39b0875.png" 
+                  alt="EAGLE Logo" 
+                  className="h-12 w-12 object-contain"
+                />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">CDRIntel</h1>
-                <p className="text-sm text-slate-400">Criminal Investigation CDR Analysis Platform</p>
+                <h1 className="text-3xl font-bold text-blue-900">EAGLE INTEL</h1>
+                <p className="text-sm text-blue-600">Elite Action Group For Drug Law Enforcement</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 text-slate-400">
-              <Activity className="h-4 w-4" />
-              <span className="text-sm">TG ANB Intelligence Division</span>
+            <div className="flex items-center space-x-2 text-blue-600">
+              <Activity className="h-5 w-5" />
+              <span className="text-sm font-medium">CDR Analysis Platform</span>
             </div>
           </div>
         </div>
@@ -37,63 +38,95 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Call Data Record Analysis</h2>
-          <p className="text-slate-400">Upload CDR files to generate comprehensive Excel reports with detailed analysis</p>
+        <div className="mb-8 text-center">
+          <h2 className="text-4xl font-bold text-blue-900 mb-3">Call Data Record Analysis</h2>
+          <p className="text-lg text-blue-700">Upload your CDR files and get comprehensive Excel reports instantly</p>
         </div>
 
-        <Tabs defaultValue="upload" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-800 border-slate-700">
-            <TabsTrigger value="upload" className="data-[state=active]:bg-blue-600">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload CDRs
-            </TabsTrigger>
-            <TabsTrigger value="processing" className="data-[state=active]:bg-blue-600">
-              <Activity className="h-4 w-4 mr-2" />
-              Processing
-            </TabsTrigger>
-            <TabsTrigger value="download" className="data-[state=active]:bg-blue-600">
-              <Download className="h-4 w-4 mr-2" />
-              Download Reports
-            </TabsTrigger>
-          </TabsList>
+        <div className="max-w-4xl mx-auto space-y-8">
+          {/* Upload Section */}
+          <Card className="bg-white/90 border-blue-200 shadow-lg">
+            <CardHeader className="text-center">
+              <CardTitle className="text-blue-900 flex items-center justify-center text-2xl">
+                <Upload className="h-6 w-6 mr-3 text-blue-600" />
+                Upload CDR Files
+              </CardTitle>
+              <CardDescription className="text-blue-600 text-base">
+                Upload single or multiple CDR CSV files for instant analysis and Excel report generation
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CDRUploader 
+                onFilesUploaded={() => {}}
+                onProcessingStart={() => setIsProcessing(true)}
+                onProcessingComplete={(data) => {
+                  setProcessedData(data);
+                  setIsProcessing(false);
+                }}
+              />
+            </CardContent>
+          </Card>
 
-          <TabsContent value="upload" className="space-y-6">
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center">
-                  <FileSpreadsheet className="h-5 w-5 mr-2 text-blue-400" />
-                  CDR File Upload
+          {/* Processing Status */}
+          {isProcessing && (
+            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  <span className="text-lg font-medium">Analyzing CDR Data...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Download Section */}
+          {processedData.length > 0 && (
+            <Card className="bg-white/90 border-green-200 shadow-lg">
+              <CardHeader className="text-center">
+                <CardTitle className="text-green-800 flex items-center justify-center text-2xl">
+                  <Download className="h-6 w-6 mr-3 text-green-600" />
+                  Download Excel Reports
                 </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Upload single or multiple CDR CSV files for analysis. Supports Vodafone, Airtel, BSNL, and other telecom formats.
+                <CardDescription className="text-green-600 text-base">
+                  Your CDR analysis is complete. Download the comprehensive Excel reports below.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <CDRUploader 
-                  onFilesUploaded={setUploadedFiles}
-                  onProcessingStart={() => setIsProcessing(true)}
-                  onProcessingComplete={(data) => {
-                    setProcessedData(data);
-                    setIsProcessing(false);
-                  }}
-                />
+                <BulkDownloader processedData={processedData} />
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          <TabsContent value="processing" className="space-y-6">
-            <ProcessingStatus 
-              uploadedFiles={uploadedFiles}
-              isProcessing={isProcessing}
-              processedData={processedData}
-            />
-          </TabsContent>
-
-          <TabsContent value="download" className="space-y-6">
-            <BulkDownloader processedData={processedData} />
-          </TabsContent>
-        </Tabs>
+          {/* Instructions */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">How to Use:</h3>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">1</div>
+                  <div>
+                    <h4 className="font-medium text-blue-900">Upload</h4>
+                    <p className="text-sm text-blue-700">Upload your CDR CSV files</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">2</div>
+                  <div>
+                    <h4 className="font-medium text-blue-900">Analyze</h4>
+                    <p className="text-sm text-blue-700">Automatic analysis & processing</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">3</div>
+                  <div>
+                    <h4 className="font-medium text-blue-900">Download</h4>
+                    <p className="text-sm text-blue-700">Get comprehensive Excel reports</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
