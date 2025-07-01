@@ -1,4 +1,3 @@
-
 export interface CDRRecord {
   cdrNo: string;
   bParty: string;
@@ -84,19 +83,28 @@ const detectProvider = (data: any[]): { provider: string; config: any } => {
   return { provider: 'UNKNOWN', config: PROVIDER_CONFIGS.VODAFONE };
 };
 
-const extractMSISDN = (data: any[], config: any): string => {
-  console.log('Extracting MSISDN with config:', config);
+const extractMSISDN = (data: any[], config: any, provider: string): string => {
+  console.log('Extracting MSISDN with config:', config, 'Provider:', provider);
   
+  // Check for IMEI pattern first
   for (let i = 0; i < Math.min(20, data.length); i++) {
     const row = data[i];
     if (row && typeof row === 'object') {
       for (const key in row) {
         const value = row[key];
         if (value && typeof value === 'string') {
-          const match = value.match(config.msisdnPattern);
-          if (match) {
-            console.log('Found MSISDN:', match[1]);
-            return match[1];
+          // Check for IMEI patterns first
+          const imeiMatch = value.match(config.imeiPattern);
+          if (imeiMatch) {
+            console.log('Found IMEI as CDR:', imeiMatch[1]);
+            return imeiMatch[1];
+          }
+          
+          // Then check for MSISDN patterns
+          const msisdnMatch = value.match(config.msisdnPattern);
+          if (msisdnMatch) {
+            console.log('Found MSISDN as CDR:', msisdnMatch[1]);
+            return msisdnMatch[1];
           }
         }
       }
@@ -122,7 +130,21 @@ const parseCallDuration = (duration: string): number => {
 const isNightTime = (time: string): boolean => {
   if (!time) return false;
   const hour = parseInt(time.split(':')[0]);
-  return hour >= 22 || hour <= 6;
+  // Night time: 18:00:00 to 06:00:00 (6 PM to 6 AM)
+  return hour >= 18 || hour < 6;
+};
+
+const isRoaming = (location: string, circle: string): boolean => {
+  if (!location && !circle) return false;
+  const locationStr = (location || '').toLowerCase();
+  const circleStr = (circle || '').toLowerCase();
+  
+  // Check if location/circle is outside Telangana
+  return !locationStr.includes('telangana') && 
+         !locationStr.includes('hyderabad') && 
+         !locationStr.includes('ts') &&
+         !circleStr.includes('telangana') && 
+         !circleStr.includes('hyderabad');
 };
 
 const getFieldValue = (row: any, index: number): string => {
@@ -196,8 +218,8 @@ export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRDa
   const { provider, config } = detectProvider(rawData);
   console.log('Detected provider:', provider);
   
-  const msisdn = extractMSISDN(rawData, config);
-  console.log('Extracted MSISDN:', msisdn);
+  const msisdn = extractMSISDN(rawData, config, provider);
+  console.log('Extracted MSISDN/CDR:', msisdn);
   
   const isImeiData = fileName.toLowerCase().includes('imei') || 
                      rawData.some(row => Object.values(row || {}).join(' ').includes('IMEI'));
@@ -418,7 +440,7 @@ const generateMaxDuration = (data: any[], provider: string, msisdn: string) => {
     }));
 };
 
-// Sheet 5: MAX STAY
+// Sheet 5: MAX STAY - Updated to consider most frequent address
 const generateMaxStay = (data: any[], provider: string, msisdn: string) => {
   const locations: { [key: string]: {
     totalCalls: number;
@@ -430,19 +452,19 @@ const generateMaxStay = (data: any[], provider: string, msisdn: string) => {
   
   data.forEach(row => {
     const mapped = mapProviderFields(row, provider);
-    const cellId = mapped.firstCellId;
+    const address = mapped.firstBts || mapped.firstCellId || '';
     
-    if (!locations[cellId]) {
-      locations[cellId] = {
+    if (!locations[address]) {
+      locations[address] = {
         totalCalls: 0,
         dates: new Set(),
         firstCall: null,
         lastCall: null,
-        address: mapped.firstBts || ''
+        address: address
       };
     }
     
-    const location = locations[cellId];
+    const location = locations[address];
     location.totalCalls++;
     location.dates.add(mapped.date);
     
@@ -457,16 +479,16 @@ const generateMaxStay = (data: any[], provider: string, msisdn: string) => {
   
   return Object.entries(locations)
     .sort(([,a], [,b]) => b.totalCalls - a.totalCalls)
-    .map(([cellId, location]) => ({
+    .map(([address, location]) => ({
       CdrNo: msisdn,
-      'Cell ID': cellId,
+      'Cell ID': address,
       'Total Calls': location.totalCalls,
       Days: location.dates.size,
       'Tower Address': location.address,
       Latitude: '',
       Longitude: '',
       Azimuth: '',
-      Roaming: '',
+      Roaming: isRoaming(location.address, '') ? 'Yes' : 'No',
       'First Call Date': location.firstCall?.split(' ')[0] || '',
       'First Call Time': location.firstCall?.split(' ')[1] || '',
       'Last Call Date': location.lastCall?.split(' ')[0] || '',
@@ -528,7 +550,12 @@ const generateOtherStateContactSummary = (data: any[], provider: string, msisdn:
 
 // Generate remaining sheets (7-16) with similar patterns
 const generateRoamingPeriod = (data: any[], provider: string, msisdn: string) => {
-  return generatePeriodAnalysis(data, provider, msisdn, 'roaming');
+  const roamingData = data.filter(row => {
+    const mapped = mapProviderFields(row, provider);
+    return isRoaming(mapped.firstBts, mapped.roaming);
+  });
+  
+  return generatePeriodAnalysis(roamingData, provider, msisdn, 'roaming');
 };
 
 const generateImeiPeriod = (data: any[], provider: string, msisdn: string) => {
