@@ -44,73 +44,135 @@ export interface ProcessedCDRData {
 // Provider detection and configuration
 const PROVIDER_CONFIGS = {
   AIRTEL: {
-    identifiers: ['BHARTI AIRTEL LIMITED', 'AIRTEL'],
+    identifiers: ['BHARTI AIRTEL LIMITED', 'Call Details of Mobile No', 'Call Details of IMEI No'],
     dataStartRow: 7,
-    msisdnPattern: /Call Details of Mobile No '(\d+)'/,
-    imeiPattern: /Call Details of IMEI No '(\d+)'/
+    msisdnPattern: /Call Details of Mobile No '(\d+)'/i,
+    imeiPattern: /Call Details of IMEI No '(\d+)'/i
   },
   BSNL: {
-    identifiers: ['Search Criteria : MSISDN', 'BSNL'],
+    identifiers: ['Search Criteria : MSISDN', 'Search Value :'],
     dataStartRow: 7,
-    msisdnPattern: /Search Value : (\d+)/,
-    imeiPattern: /IMEI.*?(\d{15})/
+    msisdnPattern: /Search Value\s*:\s*(\d+)/i,
+    imeiPattern: /IMEI.*?(\d{15})/i
   },
   JIO: {
-    identifiers: ['Ticket Number :', 'JIO'],
+    identifiers: ['Ticket Number :', 'Input Value (MSISDN/B PARTY/IMEI/IMSI/CELL ID)'],
     dataStartRow: { mobile: 19, imei: 11 },
-    msisdnPattern: /Input Value.*?'(\d+)'/,
-    imeiPattern: /Input Value.*?'(\d{15})'/
+    msisdnPattern: /Input Value.*?'(\d+)'/i,
+    imeiPattern: /Input Value.*?'(\d{15})'/i
   },
   VODAFONE: {
-    identifiers: ['Vodafone Idea Call Data Records', 'VODAFONE'],
+    identifiers: ['Vodafone Idea Call Data Records', 'MSISDN : -', 'IMEI : -'],
     dataStartRow: 12,
-    msisdnPattern: /MSISDN : - (\d+)/,
-    imeiPattern: /IMEI : - (\d+)/
+    msisdnPattern: /MSISDN\s*:\s*-\s*(\d+)/i,
+    imeiPattern: /IMEI\s*:\s*-\s*(\d+)/i
   }
 };
 
 const detectProvider = (data: any[]): { provider: string; config: any } => {
-  const firstRows = data.slice(0, 20).map(row => 
-    Object.values(row || {}).join(' ').toUpperCase()
-  ).join(' ');
+  console.log('Detecting provider from data...');
+  
+  // Convert first 20 rows to searchable text
+  const searchText = data.slice(0, 20).map(row => {
+    if (!row) return '';
+    
+    // Handle different row structures
+    if (typeof row === 'object') {
+      return Object.values(row).filter(val => val !== null && val !== undefined).join(' ');
+    }
+    return row.toString();
+  }).join(' ').toUpperCase();
+
+  console.log('Search text sample:', searchText.substring(0, 500));
 
   for (const [provider, config] of Object.entries(PROVIDER_CONFIGS)) {
-    if (config.identifiers.some(id => firstRows.includes(id.toUpperCase()))) {
+    const found = config.identifiers.some(id => {
+      const match = searchText.includes(id.toUpperCase());
+      if (match) {
+        console.log(`Found ${provider} identifier: ${id}`);
+      }
+      return match;
+    });
+    
+    if (found) {
+      console.log(`Detected provider: ${provider}`);
       return { provider, config };
     }
   }
   
-  return { provider: 'UNKNOWN', config: PROVIDER_CONFIGS.VODAFONE };
+  console.log('No provider detected, defaulting to VODAFONE');
+  return { provider: 'VODAFONE', config: PROVIDER_CONFIGS.VODAFONE };
 };
 
 const extractMSISDN = (data: any[], config: any, provider: string): string => {
-  console.log('Extracting MSISDN with config:', config, 'Provider:', provider);
+  console.log('Extracting CDR number with config:', config, 'Provider:', provider);
   
-  // Check for IMEI pattern first
-  for (let i = 0; i < Math.min(20, data.length); i++) {
+  // Search through first 25 rows for CDR number
+  for (let i = 0; i < Math.min(25, data.length); i++) {
     const row = data[i];
-    if (row && typeof row === 'object') {
-      for (const key in row) {
-        const value = row[key];
-        if (value && typeof value === 'string') {
-          // Check for IMEI patterns first
-          const imeiMatch = value.match(config.imeiPattern);
-          if (imeiMatch) {
-            console.log('Found IMEI as CDR:', imeiMatch[1]);
-            return imeiMatch[1];
-          }
-          
-          // Then check for MSISDN patterns
-          const msisdnMatch = value.match(config.msisdnPattern);
-          if (msisdnMatch) {
-            console.log('Found MSISDN as CDR:', msisdnMatch[1]);
-            return msisdnMatch[1];
-          }
-        }
+    if (!row) continue;
+    
+    // Convert row to searchable text
+    let searchText = '';
+    if (typeof row === 'object') {
+      searchText = Object.values(row).filter(val => val !== null && val !== undefined).join(' ');
+    } else {
+      searchText = row.toString();
+    }
+    
+    if (!searchText || searchText.trim() === '') continue;
+    
+    console.log(`Row ${i} text:`, searchText.substring(0, 200));
+    
+    // Try IMEI pattern first (usually longer numbers)
+    if (config.imeiPattern) {
+      const imeiMatch = searchText.match(config.imeiPattern);
+      if (imeiMatch && imeiMatch[1]) {
+        console.log('Found IMEI as CDR:', imeiMatch[1]);
+        return imeiMatch[1];
+      }
+    }
+    
+    // Then try MSISDN pattern
+    if (config.msisdnPattern) {
+      const msisdnMatch = searchText.match(config.msisdnPattern);
+      if (msisdnMatch && msisdnMatch[1]) {
+        console.log('Found MSISDN as CDR:', msisdnMatch[1]);
+        return msisdnMatch[1];
+      }
+    }
+    
+    // Additional fallback patterns for each provider
+    if (provider === 'AIRTEL') {
+      const airtelFallback = searchText.match(/Mobile No[^']*'(\d+)'/i) || 
+                            searchText.match(/IMEI No[^']*'(\d+)'/i);
+      if (airtelFallback && airtelFallback[1]) {
+        console.log('Found Airtel CDR (fallback):', airtelFallback[1]);
+        return airtelFallback[1];
+      }
+    } else if (provider === 'BSNL') {
+      const bsnlFallback = searchText.match(/Search Value[^:]*:\s*(\d+)/i);
+      if (bsnlFallback && bsnlFallback[1]) {
+        console.log('Found BSNL CDR (fallback):', bsnlFallback[1]);
+        return bsnlFallback[1];
+      }
+    } else if (provider === 'JIO') {
+      const jioFallback = searchText.match(/Input Value[^']*'(\d+)'/i);
+      if (jioFallback && jioFallback[1]) {
+        console.log('Found JIO CDR (fallback):', jioFallback[1]);
+        return jioFallback[1];
+      }
+    } else if (provider === 'VODAFONE') {
+      const vodafoneFallback = searchText.match(/MSISDN[^:]*:[^-]*-\s*(\d+)/i) ||
+                              searchText.match(/IMEI[^:]*:[^-]*-\s*(\d+)/i);
+      if (vodafoneFallback && vodafoneFallback[1]) {
+        console.log('Found Vodafone CDR (fallback):', vodafoneFallback[1]);
+        return vodafoneFallback[1];
       }
     }
   }
   
+  console.log('CDR number not found, returning Unknown');
   return 'Unknown';
 };
 
@@ -216,13 +278,13 @@ export const processCDRData = (rawData: any[], fileName: string): ProcessedCDRDa
   console.log('Processing CDR data:', { fileName, totalRows: rawData.length });
   
   const { provider, config } = detectProvider(rawData);
-  console.log('Detected provider:', provider);
+  console.log('Final detected provider:', provider);
   
   const msisdn = extractMSISDN(rawData, config, provider);
-  console.log('Extracted MSISDN/CDR:', msisdn);
+  console.log('Final extracted CDR:', msisdn);
   
   const isImeiData = fileName.toLowerCase().includes('imei') || 
-                     rawData.some(row => Object.values(row || {}).join(' ').includes('IMEI'));
+                     rawData.some(row => Object.values(row || {}).join(' ').toLowerCase().includes('imei'));
   
   const dataStartIndex = getDataStartIndex(provider, config, isImeiData);
   console.log('Data starts at index:', dataStartIndex);
