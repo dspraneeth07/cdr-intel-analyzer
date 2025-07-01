@@ -380,7 +380,7 @@ const generateSummary = (data: any[], provider: string, msisdn: string) => {
 
 // Sheet 3: MAX CALLS
 const generateMaxCalls = (data: any[], provider: string, msisdn: string) => {
-  const contacts = {};
+  const contacts: { [key: string]: number } = {};
   
   data.forEach(row => {
     const mapped = mapProviderFields(row, provider);
@@ -389,7 +389,7 @@ const generateMaxCalls = (data: any[], provider: string, msisdn: string) => {
   });
   
   return Object.entries(contacts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([,a], [,b]) => (Number(b) || 0) - (Number(a) || 0))
     .map(([bParty, calls]) => ({
       CdrNo: msisdn,
       'B Party': bParty,
@@ -400,7 +400,7 @@ const generateMaxCalls = (data: any[], provider: string, msisdn: string) => {
 
 // Sheet 4: MAX DURATION
 const generateMaxDuration = (data: any[], provider: string, msisdn: string) => {
-  const contacts = {};
+  const contacts: { [key: string]: number } = {};
   
   data.forEach(row => {
     const mapped = mapProviderFields(row, provider);
@@ -409,7 +409,7 @@ const generateMaxDuration = (data: any[], provider: string, msisdn: string) => {
   });
   
   return Object.entries(contacts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([,a], [,b]) => (Number(b) || 0) - (Number(a) || 0))
     .map(([bParty, duration]) => ({
       CdrNo: msisdn,
       'B Party': bParty,
@@ -420,7 +420,13 @@ const generateMaxDuration = (data: any[], provider: string, msisdn: string) => {
 
 // Sheet 5: MAX STAY
 const generateMaxStay = (data: any[], provider: string, msisdn: string) => {
-  const locations = {};
+  const locations: { [key: string]: {
+    totalCalls: number;
+    dates: Set<string>;
+    firstCall: string | null;
+    lastCall: string | null;
+    address: string;
+  } } = {};
   
   data.forEach(row => {
     const mapped = mapProviderFields(row, provider);
@@ -451,7 +457,7 @@ const generateMaxStay = (data: any[], provider: string, msisdn: string) => {
   
   return Object.entries(locations)
     .sort(([,a], [,b]) => b.totalCalls - a.totalCalls)
-    .map(([cellId, location]: [string, any]) => ({
+    .map(([cellId, location]) => ({
       CdrNo: msisdn,
       'Cell ID': cellId,
       'Total Calls': location.totalCalls,
