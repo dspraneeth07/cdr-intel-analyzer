@@ -34,14 +34,14 @@ const Index = () => {
                   ELITE ACTION GROUP FOR DRUG LAW ENFORCEMENT
                 </p>
                 <p className="text-sm text-blue-300 mt-2 font-light">
-                  CDR Analysis Tool
+                  CDR Analysis Tool - Multi-Provider Support
                 </p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-3 border border-white/20">
                 <Shield className="h-6 w-6 text-blue-300" />
-                <span className="text-white font-medium">Secure Analysis Platform</span>
+                <span className="text-white font-medium">Multi-Provider Analysis</span>
               </div>
             </div>
           </div>
@@ -51,10 +51,27 @@ const Index = () => {
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
         <div className="mb-12 text-center">
-          <h2 className="text-4xl font-bold text-slate-800 mb-4">Call Data Record Analysis</h2>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Upload your CDR files and get comprehensive Excel reports with detailed analysis instantly
+          <h2 className="text-4xl font-bold text-slate-800 mb-4">
+            Advanced CDR Analysis Platform
+          </h2>
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto">
+            Upload CDR files from Airtel, BSNL, Jio, Vodafone and get comprehensive Excel reports 
+            with 16 detailed analysis sheets instantly
           </p>
+          <div className="flex justify-center space-x-4 mt-6">
+            <div className="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+              Airtel Support
+            </div>
+            <div className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+              BSNL Support
+            </div>
+            <div className="px-4 py-2 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+              Jio Support
+            </div>
+            <div className="px-4 py-2 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+              Vodafone Support
+            </div>
+          </div>
         </div>
 
         <div className="max-w-4xl mx-auto space-y-8">
@@ -63,10 +80,11 @@ const Index = () => {
             <CardHeader className="text-center bg-gradient-to-r from-blue-50 to-slate-50 rounded-t-lg">
               <CardTitle className="text-slate-800 flex items-center justify-center text-2xl font-semibold">
                 <Upload className="h-7 w-7 mr-3 text-blue-600" />
-                Upload CDR Files
+                Upload Multi-Provider CDR Files
               </CardTitle>
               <CardDescription className="text-slate-600 text-base">
-                Upload single or multiple CDR CSV files for instant analysis and Excel report generation
+                Upload mixed CDR CSV files from different providers. Auto-detection and processing 
+                with 16 comprehensive analysis sheets per file.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -87,8 +105,13 @@ const Index = () => {
               <CardContent className="p-8">
                 <div className="flex items-center justify-center space-x-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                  <span className="text-xl font-medium">Analyzing CDR Data...</span>
+                  <span className="text-xl font-medium">
+                    Analyzing Multi-Provider CDR Data...
+                  </span>
                 </div>
+                <p className="text-center text-blue-200 mt-4">
+                  Auto-detecting providers and generating comprehensive analysis
+                </p>
               </CardContent>
             </Card>
           )}
@@ -99,10 +122,11 @@ const Index = () => {
               <CardHeader className="text-center bg-gradient-to-r from-emerald-50 to-green-50 rounded-t-lg">
                 <CardTitle className="text-emerald-800 flex items-center justify-center text-2xl font-semibold">
                   <Download className="h-7 w-7 mr-3 text-emerald-600" />
-                  Download Excel Reports
+                  Download Comprehensive Reports
                 </CardTitle>
                 <CardDescription className="text-emerald-600 text-base">
-                  Your CDR analysis is complete. Download the comprehensive Excel reports below.
+                  Your multi-provider CDR analysis is complete. Each file contains 16 detailed 
+                  analysis sheets with comprehensive insights.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
@@ -111,34 +135,50 @@ const Index = () => {
             </Card>
           )}
 
-          {/* Professional Instructions */}
+          {/* Enhanced Instructions */}
           <Card className="bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 shadow-lg">
             <CardContent className="p-8">
-              <h3 className="text-2xl font-semibold text-slate-800 mb-6 text-center">How to Use</h3>
+              <h3 className="text-2xl font-semibold text-slate-800 mb-6 text-center">
+                How to Use - Multi-Provider Analysis
+              </h3>
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
                   <div className="relative mb-4">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full blur opacity-20"></div>
                     <div className="relative bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto shadow-lg">1</div>
                   </div>
-                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Upload Files</h4>
-                  <p className="text-slate-600">Upload your CDR CSV files securely</p>
+                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Upload Mixed Files</h4>
+                  <p className="text-slate-600">Upload CDR files from any provider - Airtel, BSNL, Jio, Vodafone</p>
                 </div>
                 <div className="text-center">
                   <div className="relative mb-4">
                     <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full blur opacity-20"></div>
                     <div className="relative bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto shadow-lg">2</div>
                   </div>
-                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Auto Analysis</h4>
-                  <p className="text-slate-600">Automatic processing & analysis</p>
+                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Auto Detection</h4>
+                  <p className="text-slate-600">Automatic provider detection & comprehensive analysis</p>
                 </div>
                 <div className="text-center">
                   <div className="relative mb-4">
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full blur opacity-20"></div>
                     <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto shadow-lg">3</div>
                   </div>
-                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Download Reports</h4>
-                  <p className="text-slate-600">Get comprehensive Excel reports</p>
+                  <h4 className="font-semibold text-slate-800 text-lg mb-2">Get 16 Analysis Sheets</h4>
+                  <p className="text-slate-600">Comprehensive reports with detailed insights</p>
+                </div>
+              </div>
+              
+              <div className="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-3">16 Analysis Sheets Include:</h4>
+                <div className="grid md:grid-cols-2 gap-3 text-sm text-blue-800">
+                  <div>• Mapping & Summary Analysis</div>
+                  <div>• Max Calls & Duration Reports</div>
+                  <div>• Location & Stay Analysis</div>
+                  <div>• Roaming & Period Reports</div>
+                  <div>• IMEI & IMSI Tracking</div>
+                  <div>• Night & Day Activity Maps</div>
+                  <div>• Work/Home Location Analysis</div>
+                  <div>• And 9 more detailed sheets</div>
                 </div>
               </div>
             </CardContent>

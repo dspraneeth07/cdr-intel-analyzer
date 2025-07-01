@@ -17,19 +17,29 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
     const workbook = XLSX.utils.book_new();
 
     const sheets = [
+      { name: `MAPPING_${data.msisdn.slice(-4)}`, data: data.mapping },
       { name: `SUMMARY_${data.msisdn.slice(-4)}`, data: data.summary },
-      { name: `CALLDETAILS_${data.msisdn.slice(-4)}`, data: data.callDetails },
-      { name: `NIGHT_CALLS_${data.msisdn.slice(-4)}`, data: data.nightCallDetails },
-      { name: `DAY_CALLS_${data.msisdn.slice(-4)}`, data: data.dayCallDetails },
-      { name: `IMEI_SUMMARY_${data.msisdn.slice(-4)}`, data: data.imeiSummary },
-      { name: `CDAT_CONTACTS_${data.msisdn.slice(-4)}`, data: data.cdatContacts },
-      { name: `DAY_LOCATION_${data.msisdn.slice(-4)}`, data: data.dayLocationAbstract },
-      { name: `NIGHT_LOCATION_${data.msisdn.slice(-4)}`, data: data.nightLocationAbstract }
+      { name: `MAX_CALLS_${data.msisdn.slice(-4)}`, data: data.maxCalls },
+      { name: `MAX_DURATION_${data.msisdn.slice(-4)}`, data: data.maxDuration },
+      { name: `MAX_STAY_${data.msisdn.slice(-4)}`, data: data.maxStay },
+      { name: `OTHER_STATE_${data.msisdn.slice(-4)}`, data: data.otherStateContactSummary },
+      { name: `ROAMING_PERIOD_${data.msisdn.slice(-4)}`, data: data.roamingPeriod },
+      { name: `IMEI_PERIOD_${data.msisdn.slice(-4)}`, data: data.imeiPeriod },
+      { name: `IMSI_PERIOD_${data.msisdn.slice(-4)}`, data: data.imsiPeriod },
+      { name: `OFF_UNUSED_${data.msisdn.slice(-4)}`, data: data.offUnusedPeriod },
+      { name: `NIGHT_MAPPING_${data.msisdn.slice(-4)}`, data: data.nightMapping },
+      { name: `NIGHT_MAX_STAY_${data.msisdn.slice(-4)}`, data: data.nightMaxStay },
+      { name: `DAY_MAPPING_${data.msisdn.slice(-4)}`, data: data.dayMapping },
+      { name: `DAY_MAX_STAY_${data.msisdn.slice(-4)}`, data: data.dayMaxStay },
+      { name: `WORK_HOME_LOC_${data.msisdn.slice(-4)}`, data: data.workHomeLocation },
+      { name: `HOME_LOC_DAY_${data.msisdn.slice(-4)}`, data: data.homeLocationBasedOnDayFirst }
     ];
 
     sheets.forEach(sheet => {
-      const worksheet = XLSX.utils.json_to_sheet(sheet.data);
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+      if (Array.isArray(sheet.data) && sheet.data.length > 0) {
+        const worksheet = XLSX.utils.json_to_sheet(sheet.data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+      }
     });
 
     return workbook;
@@ -38,13 +48,13 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
   const downloadSingleFile = (data: any) => {
     try {
       const workbook = generateExcelFile(data);
-      const fileName = `CDR_Analysis_${data.msisdn}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `CDR_Analysis_${data.provider}_${data.msisdn}_${new Date().toISOString().split('T')[0]}.xlsx`;
       
       XLSX.writeFile(workbook, fileName);
       
       toast({
         title: "Download Complete",
-        description: `Excel file for ${data.msisdn} has been downloaded.`
+        description: `Excel file for ${data.provider} ${data.msisdn} has been downloaded with 16 analysis sheets.`
       });
     } catch (error) {
       console.error('Error generating Excel file:', error);
@@ -69,7 +79,7 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
     try {
       for (const data of processedData) {
         const workbook = generateExcelFile(data);
-        const fileName = `CDR_Analysis_${data.msisdn}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const fileName = `CDR_Analysis_${data.provider}_${data.msisdn}_${new Date().toISOString().split('T')[0]}.xlsx`;
         XLSX.writeFile(workbook, fileName);
         
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -77,7 +87,7 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
       
       toast({
         title: "Bulk Download Complete",
-        description: `${processedData.length} Excel files have been downloaded.`
+        description: `${processedData.length} Excel files have been downloaded with comprehensive analysis.`
       });
     } catch (error) {
       console.error('Error in bulk download:', error);
@@ -105,7 +115,7 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
               <div>
                 <h3 className="text-green-800 font-semibold text-lg">Bulk Download All Files</h3>
                 <p className="text-green-600">
-                  Download all {processedData.length} processed CDR files at once
+                  Download all {processedData.length} processed CDR files at once (16 sheets each)
                 </p>
               </div>
               <Button 
@@ -126,9 +136,11 @@ const BulkDownloader: React.FC<BulkDownloaderProps> = ({ processedData }) => {
                 <div className="flex items-center space-x-3">
                   <FileSpreadsheet className="h-6 w-6 text-blue-600" />
                   <div>
-                    <h4 className="text-blue-900 font-medium">CDR Analysis - {data.msisdn}</h4>
+                    <h4 className="text-blue-900 font-medium">
+                      CDR Analysis - {data.provider} {data.msisdn}
+                    </h4>
                     <p className="text-sm text-blue-600">
-                      {data.callDetails.length} call records • 8 analysis sheets
+                      {data.mapping?.length || 0} call records • 16 analysis sheets
                     </p>
                   </div>
                 </div>
