@@ -1,13 +1,15 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Download, FileSpreadsheet, Activity, Shield } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Activity, Shield, Network } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { useNavigate } from 'react-router-dom';
 import CDRUploader from '@/components/CDRUploader';
 import BulkDownloader from '@/components/BulkDownloader';
 
 const Index = () => {
   const [processedData, setProcessedData] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 font-poppins">
@@ -39,6 +41,13 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                onClick={() => navigate('/network-analysis')}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-lg"
+              >
+                <Network className="h-5 w-5 mr-2" />
+                Network Analysis
+              </Button>
               <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-3 border border-white/20">
                 <Shield className="h-6 w-6 text-blue-300" />
                 <span className="text-white font-medium">Multi-Provider Analysis</span>
