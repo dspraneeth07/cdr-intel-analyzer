@@ -85,6 +85,10 @@ const parseCSVFile = (file: File): Promise<any[]> => {
       skipEmptyLines: true,
       complete: (results) => {
         console.log('CSV parsed successfully:', results.data.length, 'records');
+        if (results.data.length === 0) {
+          reject(new Error('CSV file is empty or has no valid data'));
+          return;
+        }
         resolve(results.data);
       },
       error: (error) => {
@@ -139,14 +143,14 @@ const extractLocationFromCDR = (cellAddress: string): { lat: number; lng: number
 };
 
 const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, NetworkNode>, edges: Map<string, NetworkEdge> } => {
-  console.log('Building network from CDRs:', processedCDRs.length);
+  console.log('Building REAL network from CDRs:', processedCDRs.length);
   const nodes = new Map<string, NetworkNode>();
   const edges = new Map<string, NetworkEdge>();
   const contacts = new Map<string, Set<string>>();
 
-  // Process each CDR file
+  // Process each CDR file to build actual network
   processedCDRs.forEach((cdrData, index) => {
-    console.log(`Processing CDR ${index + 1}:`, cdrData.msisdn);
+    console.log(`Processing CDR ${index + 1}:`, cdrData.msisdn, 'Records:', cdrData.mapping?.length || 0);
     const { msisdn, provider, mapping } = cdrData;
     
     // Initialize CDR holder node
@@ -168,7 +172,8 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
           provider,
           imei: [],
           imsi: [],
-          cellIds: []
+          cellIds: [],
+          influenceScore: 0
         }
       });
     }
@@ -176,29 +181,30 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
     const cdrNode = nodes.get(msisdn)!;
     const contactSet = contacts.get(msisdn) || new Set<string>();
 
-    // Process each call record
+    // Process actual call records from CDR
     if (mapping && Array.isArray(mapping)) {
       mapping.forEach((record: any) => {
-        const bParty = record['B Party'] || record.bParty || record['Called Number'];
-        if (!bParty || bParty === msisdn) return;
+        // Extract B-Party number from various possible field names
+        const bParty = record['B Party'] || record.bParty || record['Called Number'] || 
+                      record['Called_Number'] || record['B_Party'] || record['CALLED_NUMBER'];
+        
+        if (!bParty || bParty === msisdn || bParty === '') return;
 
-        const duration = parseInt(record.Duration || record.duration || '0') || 0;
-        const callType = record['Call Type'] || record.callType || '';
-        const time = record.Time || record.time || '12:00';
-        const date = record.Date || record.date || '2024-01-01';
-        const cellId = record['First Cell ID'] || record.cellId || '';
-        const cellAddress = record['First Cell ID Address'] || record.cellAddress || '';
-        const imei = record.IMEI || record.imei || '';
-        const imsi = record.IMSI || record.imsi || '';
+        const duration = parseInt(record.Duration || record.duration || record['Call Duration'] || '0') || 0;
+        const callType = (record['Call Type'] || record.callType || record['CALL_TYPE'] || '').toLowerCase();
+        const time = record.Time || record.time || record['Call Time'] || '12:00';
+        const date = record.Date || record.date || record['Call Date'] || '2024-01-01';
+
+        console.log(`Processing call: ${msisdn} -> ${bParty}, Duration: ${duration}, Type: ${callType}`);
 
         // Track unique contacts
         contactSet.add(bParty);
 
-        // Update CDR holder node
+        // Update CDR holder node with real data
         cdrNode.callCount++;
         cdrNode.totalDuration += duration;
         
-        if (callType.toLowerCase().includes('out')) {
+        if (callType.includes('out') || callType.includes('outgoing')) {
           cdrNode.metadata.outgoingCalls++;
         } else {
           cdrNode.metadata.incomingCalls++;
@@ -208,22 +214,6 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
         const hour = parseInt(time.split(':')[0]) || 12;
         if (hour >= 18 || hour < 6) {
           cdrNode.metadata.nightCalls++;
-        }
-
-        // Add IMEI, IMSI, Cell IDs
-        if (imei && !cdrNode.metadata.imei!.includes(imei)) {
-          cdrNode.metadata.imei!.push(imei);
-        }
-        if (imsi && !cdrNode.metadata.imsi!.includes(imsi)) {
-          cdrNode.metadata.imsi!.push(imsi);
-        }
-        if (cellId && !cdrNode.metadata.cellIds!.includes(cellId)) {
-          cdrNode.metadata.cellIds!.push(cellId);
-        }
-
-        // Set location if available
-        if (!cdrNode.location && cellAddress) {
-          cdrNode.location = extractLocationFromCDR(cellAddress);
         }
 
         // Initialize B-Party node if not exists
@@ -237,12 +227,12 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
             totalDuration: 0,
             uniqueContacts: 0,
             centrality: { degree: 0, betweenness: 0, closeness: 0, eigenvector: 0 },
-            location: extractLocationFromCDR(''),
             metadata: {
               incomingCalls: 0,
               outgoingCalls: 0,
               avgCallDuration: 0,
-              nightCalls: 0
+              nightCalls: 0,
+              influenceScore: 0
             }
           });
         }
@@ -251,7 +241,7 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
         bPartyNode.callCount++;
         bPartyNode.totalDuration += duration;
 
-        // Create or update edge
+        // Create or update edge between nodes
         const edgeId = `${msisdn}-${bParty}`;
         const reverseEdgeId = `${bParty}-${msisdn}`;
         
@@ -303,7 +293,19 @@ const buildNetworkFromCDRs = (processedCDRs: any[]): { nodes: Map<string, Networ
     cdrNode.metadata.avgCallDuration = cdrNode.callCount > 0 ? cdrNode.totalDuration / cdrNode.callCount : 0;
   });
 
-  console.log('Network built - Nodes:', nodes.size, 'Edges:', edges.size);
+  console.log('REAL Network built - Nodes:', nodes.size, 'Edges:', edges.size);
+  
+  // Log some sample data to verify it's real
+  const sampleNode = Array.from(nodes.values())[0];
+  if (sampleNode) {
+    console.log('Sample node data:', {
+      id: sampleNode.id,
+      callCount: sampleNode.callCount,
+      uniqueContacts: sampleNode.uniqueContacts,
+      role: sampleNode.role
+    });
+  }
+  
   return { nodes, edges };
 };
 
@@ -328,37 +330,51 @@ const classifyRoles = (nodes: Map<string, NetworkNode>, edges: Map<string, Netwo
   
   if (cdrNodes.length === 0) return;
 
+  // Calculate influence scores based on real CDR data
   cdrNodes.forEach(node => {
     const influenceScore = 
-      (node.centrality.degree * 0.2) +
-      (node.centrality.betweenness * 0.3) +
-      (node.centrality.closeness * 0.2) +
-      (node.centrality.eigenvector * 0.3);
+      (node.centrality.degree * 0.25) +
+      (node.centrality.betweenness * 0.25) +
+      (node.uniqueContacts * 0.2) +
+      (node.callCount * 0.15) +
+      (node.metadata.nightCalls * 0.15);
     
     node.metadata.influenceScore = influenceScore;
   });
 
+  // Sort by influence for role classification
   cdrNodes.sort((a, b) => (b.metadata.influenceScore || 0) - (a.metadata.influenceScore || 0));
 
+  // Classify roles based on real patterns
   cdrNodes.forEach((node, index) => {
     const incomingRatio = node.metadata.incomingCalls / Math.max(1, node.callCount);
     const nightCallRatio = node.metadata.nightCalls / Math.max(1, node.callCount);
     const uniqueContacts = node.uniqueContacts;
+    const avgCallDuration = node.metadata.avgCallDuration;
     
-    if (index < Math.ceil(cdrNodes.length * 0.1) && 
-        incomingRatio > 0.6 && 
-        nightCallRatio > 0.4 && 
-        uniqueContacts > 5) {
+    console.log(`Analyzing node ${node.id}: calls=${node.callCount}, contacts=${uniqueContacts}, nightRatio=${nightCallRatio.toFixed(2)}`);
+    
+    // Kingpin: High influence, many contacts, receives many calls
+    if (index < Math.ceil(cdrNodes.length * 0.15) && 
+        incomingRatio > 0.4 && 
+        uniqueContacts > Math.max(3, cdrNodes.length * 0.3)) {
       node.type = 'kingpin';
-      node.role = 'Kingpin (High Influence Leader)';
-    } else if (node.centrality.betweenness > 2 && 
-               incomingRatio > 0.3 && incomingRatio < 0.7 &&
-               uniqueContacts > 3) {
+      node.role = 'Kingpin (Network Leader)';
+      console.log(`Classified ${node.id} as KINGPIN`);
+    } 
+    // Middleman: Medium influence, bridges connections
+    else if (node.centrality.betweenness > 1 && 
+             uniqueContacts > Math.max(2, cdrNodes.length * 0.2) &&
+             incomingRatio > 0.2) {
       node.type = 'middleman';
       node.role = 'Middleman (Network Bridge)';
-    } else {
+      console.log(`Classified ${node.id} as MIDDLEMAN`);
+    } 
+    // Peddler: Lower influence, end user
+    else {
       node.type = 'peddler';
       node.role = 'Peddler (End User)';
+      console.log(`Classified ${node.id} as PEDDLER`);
     }
   });
 };
@@ -424,41 +440,54 @@ const generateNetworkStatistics = (nodes: Map<string, NetworkNode>, edges: Map<s
 
 export const analyzeNetworkFromCDRs = async (files: File[]): Promise<NetworkAnalysisResult> => {
   try {
-    console.log('=== Starting network analysis ===');
+    console.log('=== Starting REAL CDR network analysis ===');
     console.log('Files to process:', files.length);
     
     if (files.length === 0) {
       throw new Error('No files provided for analysis');
     }
 
-    // Parse all CDR files with timeout
+    // Parse all CDR files
     const parsedFiles = await Promise.all(
       files.map(async (file) => {
-        console.log('Parsing file:', file.name);
+        console.log('Parsing CDR file:', file.name);
         const data = await parseCSVFile(file);
-        console.log('File parsed:', file.name, 'Records:', data.length);
+        console.log('CDR file parsed:', file.name, 'Records:', data.length);
+        
+        // Log sample record to understand structure
+        if (data.length > 0) {
+          console.log('Sample CDR record:', Object.keys(data[0]));
+        }
+        
         return { fileName: file.name, data };
       })
     );
 
-    console.log('All files parsed successfully');
-
-    // Process each CDR file
+    // Process each CDR file using the processor
     const processedCDRs = parsedFiles.map(({ fileName, data }) => {
-      console.log('Processing CDR for file:', fileName);
+      console.log('Processing CDR data for:', fileName);
       const processed = processCDRData(data, fileName);
-      console.log('CDR processed:', processed.msisdn, 'Records:', processed.mapping?.length || 0);
+      console.log('CDR processed - MSISDN:', processed.msisdn, 'Mapped records:', processed.mapping?.length || 0);
+      
+      // Log some sample processed data
+      if (processed.mapping && processed.mapping.length > 0) {
+        const sample = processed.mapping[0];
+        console.log('Sample processed record:', sample);
+      }
+      
       return processed;
     });
 
-    console.log('All CDRs processed, building network...');
+    console.log('All CDRs processed, building REAL network...');
 
-    // Build network
+    // Build network from actual CDR data
     const { nodes: allNodes, edges: allEdges } = buildNetworkFromCDRs(processedCDRs);
     
     if (allNodes.size === 0) {
-      throw new Error('No valid network nodes could be created from the provided CDR data');
+      throw new Error('No valid network nodes could be created. Please check CDR file format.');
     }
+
+    console.log('REAL network built successfully!');
 
     // Calculate centralities and classify roles
     calculateCentralities(allNodes, allEdges);
@@ -502,27 +531,33 @@ export const analyzeNetworkFromCDRs = async (files: File[]): Promise<NetworkAnal
       statistics: fullStats
     };
 
-    // Detect suspicious patterns
+    // Detect suspicious patterns from real data
     const suspiciousPatterns = [
       {
         type: 'High Night Activity',
-        description: 'Nodes with >60% night calls',
+        description: 'Numbers with >50% night calls (suspicious timing)',
         nodes: Array.from(allNodes.values())
-          .filter(node => (node.metadata.nightCalls / Math.max(1, node.callCount)) > 0.6)
+          .filter(node => (node.metadata.nightCalls / Math.max(1, node.callCount)) > 0.5)
           .map(node => node.id),
         severity: 'high' as const
       },
       {
         type: 'Common External Contacts',
-        description: 'External contacts connected to multiple CDR holders',
+        description: 'External numbers contacted by multiple CDR holders',
         nodes: commonContacts,
         severity: 'medium' as const
       }
     ];
 
-    console.log('=== Analysis completed successfully ===');
+    console.log('=== REAL CDR Analysis completed successfully ===');
     console.log('Internal network:', internalNetwork.nodes.length, 'nodes,', internalNetwork.edges.length, 'edges');
     console.log('Full network:', fullNetwork.nodes.length, 'nodes,', fullNetwork.edges.length, 'edges');
+    console.log('Role distribution:', {
+      kingpins: fullStats.kingpins,
+      middlemen: fullStats.middlemen,
+      peddlers: fullStats.peddlers,
+      external: fullStats.externalContacts
+    });
 
     return {
       internalNetwork,
@@ -532,7 +567,7 @@ export const analyzeNetworkFromCDRs = async (files: File[]): Promise<NetworkAnal
     };
 
   } catch (error) {
-    console.error('=== Network analysis failed ===');
+    console.error('=== CDR Network analysis failed ===');
     console.error('Error details:', error);
     throw new Error(`Failed to analyze CDR network: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
