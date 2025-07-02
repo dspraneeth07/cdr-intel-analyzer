@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Upload, Network, Users, Crown, Layers, TrendingUp } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast";
 import Papa from 'papaparse';
 import { processCDRData, ProcessedCDRData } from '@/utils/cdrProcessor';
-import { analyzeNetworkData, NetworkAnalysis } from '@/utils/networkAnalyzer';
+import { analyzeNetworkData, type NetworkAnalysis } from '@/utils/networkAnalyzer';
 import NetworkMap from '@/components/NetworkMap';
 
 const NetworkAnalysis: React.FC = () => {
