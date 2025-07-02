@@ -27,6 +27,13 @@ interface NetworkGraphViewProps {
 const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({ data, title, description }) => {
   // Convert network data to ReactFlow format
   const { nodes: flowNodes, edges: flowEdges } = useMemo(() => {
+    console.log('Converting network data to ReactFlow format:', data);
+    
+    if (!data.nodes || data.nodes.length === 0) {
+      console.log('No nodes found in data');
+      return { nodes: [], edges: [] };
+    }
+
     const nodes: Node[] = data.nodes.map((node, index) => {
       // Position nodes in a circular layout
       const angle = (index / data.nodes.length) * 2 * Math.PI;
@@ -114,6 +121,7 @@ const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({ data, title, descri
       };
     });
 
+    console.log('Generated nodes:', nodes.length, 'edges:', edges.length);
     return { nodes, edges };
   }, [data]);
 
@@ -124,6 +132,22 @@ const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({ data, title, descri
     (params: any) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+
+  if (!data.nodes || data.nodes.length === 0) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <p className="text-gray-500">No network data available to display</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full">
@@ -180,7 +204,7 @@ const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({ data, title, descri
                 }
               }}
             />
-            <Background variant="cross" gap={12} size={1} />
+            <Background gap={12} size={1} />
             <Panel position="top-right">
               <div className="bg-white p-2 rounded shadow text-xs">
                 <div>Network Density: {(data.statistics.networkDensity * 100).toFixed(1)}%</div>

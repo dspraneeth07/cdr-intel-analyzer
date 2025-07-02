@@ -1,6 +1,7 @@
+
 import React, { useEffect, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,208 +10,167 @@ import type { NetworkData } from '@/utils/networkAnalyzer';
 
 interface LocationMapViewProps {
   data: NetworkData;
-  mapboxToken: string;
   title: string;
 }
 
-const LocationMapView: React.FC<LocationMapViewProps> = ({ data, mapboxToken, title }) => {
+const LocationMapView: React.FC<LocationMapViewProps> = ({ data, title }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
+  const map = useRef<L.Map | null>(null);
   const [mapError, setMapError] = useState<string>('');
 
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
+    if (!mapContainer.current) return;
 
     try {
-      mapboxgl.accessToken = mapboxToken;
-      
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/light-v11',
-        center: [78.4867, 17.3850], // Hyderabad, India
-        zoom: 10
+      // Initialize Leaflet map with OpenStreetMap
+      map.current = L.map(mapContainer.current).setView([17.3850, 78.4867], 10);
+
+      // Add OpenStreetMap tile layer (no API key required)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map.current);
+
+      // Fix for default markers in Leaflet
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
       });
 
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      // Add markers for each node with location
+      const nodesWithLocation = data.nodes.filter(node => node.location);
+      
+      if (nodesWithLocation.length === 0) {
+        setMapError('No location data available for the nodes');
+        return;
+      }
 
-      map.current.on('load', () => {
-        // Add markers for each node with location
-        const nodesWithLocation = data.nodes.filter(node => node.location);
+      const markers: L.Marker[] = [];
+
+      nodesWithLocation.forEach(node => {
+        if (!node.location || !map.current) return;
+
+        // Create marker color based on role
+        let markerColor = '#6b7280';
+        let markerSize = 20;
         
-        if (nodesWithLocation.length === 0) {
-          setMapError('No location data available for the nodes');
-          return;
+        switch (node.type) {
+          case 'kingpin':
+            markerColor = '#dc2626';
+            markerSize = 30;
+            break;
+          case 'middleman':
+            markerColor = '#ea580c';
+            markerSize = 25;
+            break;
+          case 'peddler':
+            markerColor = '#2563eb';
+            markerSize = 20;
+            break;
+          case 'external':
+            markerColor = '#6b7280';
+            markerSize = 15;
+            break;
         }
 
-        nodesWithLocation.forEach(node => {
-          if (!node.location || !map.current) return;
-
-          // Create marker color based on role
-          let markerColor = '#6b7280';
-          switch (node.type) {
-            case 'kingpin':
-              markerColor = '#dc2626';
-              break;
-            case 'middleman':
-              markerColor = '#ea580c';
-              break;
-            case 'peddler':
-              markerColor = '#2563eb';
-              break;
-            case 'external':
-              markerColor = '#6b7280';
-              break;
-          }
-
-          // Create custom marker
-          const el = document.createElement('div');
-          el.className = 'custom-marker';
-          el.style.cssText = `
-            width: ${node.type === 'kingpin' ? '30px' : node.type === 'middleman' ? '25px' : '20px'};
-            height: ${node.type === 'kingpin' ? '30px' : node.type === 'middleman' ? '25px' : '20px'};
+        // Create custom marker HTML
+        const customIcon = L.divIcon({
+          html: `<div style="
+            width: ${markerSize}px;
+            height: ${markerSize}px;
             border-radius: 50%;
             background-color: ${markerColor};
             border: 3px solid white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            cursor: pointer;
-          `;
-
-          // Create popup content
-          const popupContent = `
-            <div class="p-2">
-              <h4 class="font-semibold text-sm">${node.id}</h4>
-              <p class="text-xs text-gray-600">${node.role}</p>
-              <div class="mt-2 text-xs">
-                <div>Calls: ${node.callCount}</div>
-                <div>Duration: ${Math.round(node.totalDuration / 60)} mins</div>
-                <div>Contacts: ${node.uniqueContacts}</div>
-                ${node.metadata.provider ? `<div>Provider: ${node.metadata.provider}</div>` : ''}
-              </div>
-              <div class="mt-2 text-xs text-gray-500">
-                ${node.location?.address || ''}
-              </div>
-            </div>
-          `;
-
-          const popup = new mapboxgl.Popup({
-            offset: 25,
-            closeButton: true,
-            closeOnClick: false
-          }).setHTML(popupContent);
-
-          new mapboxgl.Marker(el)
-            .setLngLat([node.location.lng, node.location.lat])
-            .setPopup(popup)
-            .addTo(map.current!);
+          "></div>`,
+          className: 'custom-marker',
+          iconSize: [markerSize, markerSize],
+          iconAnchor: [markerSize/2, markerSize/2]
         });
 
-        // Draw connections between nodes
-        const connections = data.edges
-          .filter(edge => {
-            const sourceNode = data.nodes.find(n => n.id === edge.source);
-            const targetNode = data.nodes.find(n => n.id === edge.target);
-            return sourceNode?.location && targetNode?.location;
-          })
-          .map(edge => {
-            const sourceNode = data.nodes.find(n => n.id === edge.source)!;
-            const targetNode = data.nodes.find(n => n.id === edge.target)!;
-            
-            return {
-              type: "Feature" as const,
-              properties: {
-                callCount: edge.callCount,
-                weight: edge.weight
-              },
-              geometry: {
-                type: "LineString" as const,
-                coordinates: [
-                  [sourceNode.location!.lng, sourceNode.location!.lat],
-                  [targetNode.location!.lng, targetNode.location!.lat]
-                ]
-              }
-            };
-          });
+        // Create popup content
+        const popupContent = `
+          <div class="p-2">
+            <h4 class="font-semibold text-sm">${node.id}</h4>
+            <p class="text-xs text-gray-600">${node.role}</p>
+            <div class="mt-2 text-xs">
+              <div>Calls: ${node.callCount}</div>
+              <div>Duration: ${Math.round(node.totalDuration / 60)} mins</div>
+              <div>Contacts: ${node.uniqueContacts}</div>
+              ${node.metadata.provider ? `<div>Provider: ${node.metadata.provider}</div>` : ''}
+            </div>
+            <div class="mt-2 text-xs text-gray-500">
+              ${node.location?.address || ''}
+            </div>
+          </div>
+        `;
 
-        if (connections.length > 0) {
-          map.current!.addSource('connections', {
-            type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: connections
-            }
-          });
-
-          map.current!.addLayer({
-            id: 'connections',
-            type: 'line',
-            source: 'connections',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': [
-                'interpolate',
-                ['linear'],
-                ['get', 'weight'],
-                1, '#94a3b8',
-                10, '#f59e0b',
-                50, '#dc2626'
-              ],
-              'line-width': [
-                'interpolate',
-                ['linear'],
-                ['get', 'weight'],
-                1, 1,
-                10, 3,
-                50, 6
-              ],
-              'line-opacity': 0.7
-            }
-          });
-        }
-
-        // Fit map to show all markers
-        if (nodesWithLocation.length > 1) {
-          const bounds = new mapboxgl.LngLatBounds();
-          nodesWithLocation.forEach(node => {
-            if (node.location) {
-              bounds.extend([node.location.lng, node.location.lat]);
-            }
-          });
-          map.current!.fitBounds(bounds, { padding: 50 });
-        }
+        const marker = L.marker([node.location.lat, node.location.lng], { icon: customIcon })
+          .addTo(map.current!)
+          .bindPopup(popupContent);
+        
+        markers.push(marker);
       });
+
+      // Draw connections between nodes
+      const connections = data.edges.filter(edge => {
+        const sourceNode = data.nodes.find(n => n.id === edge.source);
+        const targetNode = data.nodes.find(n => n.id === edge.target);
+        return sourceNode?.location && targetNode?.location;
+      });
+
+      connections.forEach(edge => {
+        const sourceNode = data.nodes.find(n => n.id === edge.source)!;
+        const targetNode = data.nodes.find(n => n.id === edge.target)!;
+        
+        if (!sourceNode.location || !targetNode.location) return;
+
+        // Determine line color and weight based on connection strength
+        let lineColor = '#94a3b8';
+        let lineWeight = Math.min(8, Math.max(1, edge.weight / 10));
+        
+        if (edge.metadata.dayTime === 'night') {
+          lineColor = '#7c3aed'; // Purple for night calls
+        } else if (edge.callCount > 50) {
+          lineColor = '#dc2626'; // Red for high frequency
+        }
+
+        const polyline = L.polyline([
+          [sourceNode.location.lat, sourceNode.location.lng],
+          [targetNode.location.lat, targetNode.location.lng]
+        ], {
+          color: lineColor,
+          weight: lineWeight,
+          opacity: 0.7
+        }).addTo(map.current!);
+
+        polyline.bindPopup(`
+          <div class="text-xs">
+            <div>Calls: ${edge.callCount}</div>
+            <div>Total Duration: ${Math.round(edge.totalDuration / 60)} mins</div>
+            <div>Avg Duration: ${Math.round(edge.avgDuration / 60)} mins</div>
+          </div>
+        `);
+      });
+
+      // Fit map to show all markers
+      if (markers.length > 1) {
+        const group = new L.FeatureGroup(markers);
+        map.current!.fitBounds(group.getBounds().pad(0.1));
+      } else if (markers.length === 1) {
+        map.current!.setView([nodesWithLocation[0].location!.lat, nodesWithLocation[0].location!.lng], 12);
+      }
 
     } catch (error) {
       console.error('Map initialization error:', error);
-      setMapError('Failed to initialize map. Please check your Mapbox token.');
+      setMapError('Failed to initialize map.');
     }
 
     return () => {
       map.current?.remove();
     };
-  }, [data, mapboxToken]);
-
-  if (!mapboxToken) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            {title}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertDescription>
-              Please provide a Mapbox public token to view the location map.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+  }, [data]);
 
   return (
     <Card className="w-full">
@@ -230,7 +190,7 @@ const LocationMapView: React.FC<LocationMapViewProps> = ({ data, mapboxToken, ti
           </div>
         </CardTitle>
         <CardDescription>
-          Geographic visualization of network participants and their connections
+          Geographic visualization of network participants and their connections using OpenStreetMap
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -268,6 +228,7 @@ const LocationMapView: React.FC<LocationMapViewProps> = ({ data, mapboxToken, ti
         <div className="mt-4 text-sm text-gray-600">
           <p>Click on markers to view detailed information about each participant.</p>
           <p>Line thickness and color indicate connection strength and frequency.</p>
+          <p>Map powered by OpenStreetMap - no API key required.</p>
         </div>
       </CardContent>
     </Card>

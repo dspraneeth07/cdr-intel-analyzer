@@ -16,7 +16,6 @@ const NetworkAnalysis = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<NetworkAnalysisResult | null>(null);
-  const [mapboxToken, setMapboxToken] = useState('');
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +43,9 @@ const NetworkAnalysis = () => {
 
     setIsAnalyzing(true);
     try {
+      console.log('Starting network analysis for', files.length, 'files');
       const result = await analyzeNetworkFromCDRs(files);
+      console.log('Analysis result:', result);
       setAnalysisResult(result);
       toast({
         title: "Analysis Complete",
@@ -134,21 +135,6 @@ const NetworkAnalysis = () => {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="mapbox-token" className="text-base font-medium">Mapbox Public Token (for location mapping)</Label>
-                <Input
-                  id="mapbox-token"
-                  type="text"
-                  placeholder="pk.eyJ1IjoieW91cnVzZXJuYW1lIiwiYSI6ImNsaWZhMjNhdzB..."
-                  value={mapboxToken}
-                  onChange={(e) => setMapboxToken(e.target.value)}
-                  className="mt-2"
-                />
-                <p className="text-sm text-slate-500 mt-1">
-                  Get your token from <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">mapbox.com</a>
-                </p>
-              </div>
-
               {files.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-base font-medium">Uploaded Files ({files.length})</Label>
@@ -221,7 +207,6 @@ const NetworkAnalysis = () => {
                   <TabsContent value="internal-map" className="mt-6">
                     <LocationMapView
                       data={analysisResult.internalNetwork}
-                      mapboxToken={mapboxToken}
                       title="Internal Network Location Map"
                     />
                   </TabsContent>
@@ -237,7 +222,6 @@ const NetworkAnalysis = () => {
                   <TabsContent value="external-map" className="mt-6">
                     <LocationMapView
                       data={analysisResult.fullNetwork}
-                      mapboxToken={mapboxToken}
                       title="Complete Network Location Map"
                     />
                   </TabsContent>
