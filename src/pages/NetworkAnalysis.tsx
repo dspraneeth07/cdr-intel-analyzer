@@ -1,266 +1,341 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Network, MapPin, Users, Activity } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Upload, Network, Users, Crown, Layers, TrendingUp } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import NetworkGraphView from '@/components/NetworkGraphView';
-import LocationMapView from '@/components/LocationMapView';
-import { analyzeNetworkFromCDRs } from '@/utils/networkAnalyzer';
-import type { NetworkAnalysisResult } from '@/utils/networkAnalyzer';
+import Papa from 'papaparse';
+import { processCDRData, ProcessedCDRData } from '@/utils/cdrProcessor';
+import { analyzeNetworkData, type NetworkAnalysis } from '@/utils/networkAnalyzer';
+import NetworkMap from '@/components/NetworkMap';
 
-const NetworkAnalysis = () => {
+const NetworkAnalysis: React.FC = () => {
   const [files, setFiles] = useState<File[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<NetworkAnalysisResult | null>(null);
-  const [error, setError] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [networkAnalysis, setNetworkAnalysis] = useState<NetworkAnalysis | null>(null);
   const { toast } = useToast();
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = Array.from(event.target.files || []);
-    setFiles(prev => [...prev, ...uploadedFiles]);
-    setError(''); // Clear any previous errors
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    const csvFiles = selectedFiles.filter(file => 
+      file.name.toLowerCase().endsWith('.csv')
+    );
+    
+    if (csvFiles.length === 0) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload CSV files only.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setFiles(prev => [...prev, ...csvFiles]);
     toast({
       title: "Files Added",
-      description: `${uploadedFiles.length} CDR files added for analysis`,
+      description: `${csvFiles.length} CSV file(s) added for network analysis.`
     });
+  };
+
+  const processNetworkAnalysis = async () => {
+    if (files.length === 0) {
+      toast({
+        title: "No Files Selected",
+        description: "Please upload CDR files for network analysis.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const processedData: ProcessedCDRData[] = [];
+      
+      for (const file of files) {
+        const csvData = await new Promise<any[]>((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.errors.length > 0) {
+                console.log('CSV parsing warnings:', results.errors);
+              }
+              resolve(results.data);
+            },
+            error: (error) => reject(error)
+          });
+        });
+
+        const processed = processCDRData(csvData, file.name);
+        processedData.push(processed);
+      }
+
+      const analysis = analyzeNetworkData(processedData);
+      setNetworkAnalysis(analysis);
+      
+      toast({
+        title: "Network Analysis Complete",
+        description: `Analyzed ${files.length} CDR files and found ${analysis.nodes.length} network participants.`
+      });
+
+    } catch (error) {
+      console.error('Error processing network analysis:', error);
+      toast({
+        title: "Processing Error",
+        description: "An error occurred while analyzing the network.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const analyzeNetwork = async () => {
-    if (files.length === 0) {
-      toast({
-        title: "No Files",
-        description: "Please upload CDR files to analyze",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsAnalyzing(true);
-    setError('');
-    setAnalysisResult(null);
-
-    try {
-      console.log('Starting network analysis for', files.length, 'files');
-      const result = await analyzeNetworkFromCDRs(files);
-      console.log('Analysis result received:', result);
-      
-      if (!result || !result.internalNetwork || !result.fullNetwork) {
-        throw new Error('Invalid analysis result received');
-      }
-
-      setAnalysisResult(result);
-      toast({
-        title: "Analysis Complete",
-        description: `Network analysis completed for ${files.length} CDR files`,
-      });
-    } catch (error) {
-      console.error('Analysis error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setError(errorMessage);
-      toast({
-        title: "Analysis Failed",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
+  const resetAnalysis = () => {
+    setFiles([]);
+    setNetworkAnalysis(null);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 font-poppins">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 shadow-2xl">
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-xl blur opacity-75"></div>
-                <div className="relative p-3 bg-white rounded-xl shadow-lg">
-                  <Network className="h-16 w-16 text-blue-600" />
-                </div>
-              </div>
-              <div className="text-white">
-                <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
-                  CDR NETWORK ANALYZER
-                </h1>
-                <p className="text-xl font-medium text-blue-200 mt-1 tracking-wide">
-                  Criminal Network Detection & Role Classification
-                </p>
-                <p className="text-sm text-blue-300 mt-2 font-light">
-                  Kingpin • Middleman • Peddler Identification System
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-3 border border-white/20">
-                <Users className="h-6 w-6 text-blue-300" />
-                <span className="text-white font-medium">Multi-CDR Analysis</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="container mx-auto px-6 py-12">
-        <div className="mb-12 text-center">
-          <h2 className="text-4xl font-bold text-slate-800 mb-4">
-            Criminal Network Analysis Platform
-          </h2>
-          <p className="text-xl text-slate-600 max-w-4xl mx-auto">
-            Upload multiple CDR files to analyze criminal networks, identify key players, 
-            and visualize connections through advanced graph theory and behavioral pattern mining
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2 flex items-center">
+            <Network className="h-8 w-8 mr-3 text-purple-400" />
+            CDR Network Analysis
+          </h1>
+          <p className="text-slate-300">
+            Analyze multiple CDR files to identify network relationships, kingpins, middlemen, and peddlers
           </p>
         </div>
 
-        <div className="max-w-6xl mx-auto space-y-8">
-          {/* Upload Section */}
-          <Card className="bg-white/80 backdrop-blur-sm border-slate-200 shadow-xl">
-            <CardHeader className="text-center bg-gradient-to-r from-blue-50 to-slate-50 rounded-t-lg">
-              <CardTitle className="text-slate-800 flex items-center justify-center text-2xl font-semibold">
-                <Upload className="h-7 w-7 mr-3 text-blue-600" />
-                Upload Multiple CDR Files
-              </CardTitle>
-              <CardDescription className="text-slate-600 text-base">
-                Upload CDR files from multiple suspects to analyze criminal network patterns
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              <div>
-                <Label htmlFor="cdr-files" className="text-base font-medium">Select CDR Files (CSV format)</Label>
-                <Input
-                  id="cdr-files"
-                  type="file"
-                  multiple
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="mt-2"
-                />
-              </div>
-
-              {files.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-base font-medium">Uploaded Files ({files.length})</Label>
-                  <div className="max-h-32 overflow-y-auto space-y-1">
-                    {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-50 p-2 rounded">
-                        <span className="text-sm">{file.name}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Button
-                onClick={analyzeNetwork}
-                disabled={isAnalyzing || files.length === 0}
-                className="w-full bg-gradient-to-r from-blue-600 to-slate-700 hover:from-blue-700 hover:to-slate-800 text-white py-3 text-lg"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Activity className="h-5 w-5 mr-2 animate-spin" />
-                    Analyzing Network... (This may take a few minutes)
-                  </>
-                ) : (
-                  <>
-                    <Network className="h-5 w-5 mr-2" />
-                    Analyze Criminal Network
-                  </>
-                )}
-              </Button>
-
-              {/* Error Display */}
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    {error}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Loading Status */}
-              {isAnalyzing && (
-                <Alert>
-                  <AlertDescription>
-                    Processing CDR files... This may take several minutes depending on the size of your data.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Results Section */}
-          {analysisResult && (
-            <Card className="bg-white/80 backdrop-blur-sm border-emerald-200 shadow-xl">
-              <CardHeader className="text-center bg-gradient-to-r from-emerald-50 to-green-50 rounded-t-lg">
-                <CardTitle className="text-emerald-800 flex items-center justify-center text-2xl font-semibold">
-                  <Network className="h-7 w-7 mr-3 text-emerald-600" />
-                  Network Analysis Results
+        {!networkAnalysis ? (
+          <div className="space-y-6">
+            {/* File Upload Section */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <Upload className="h-5 w-5 mr-2 text-blue-400" />
+                  Upload CDR Files
                 </CardTitle>
-                <CardDescription className="text-emerald-600 text-base">
-                  Criminal network visualization and role classification
+                <CardDescription className="text-slate-400">
+                  Upload multiple CDR CSV files for network analysis
                 </CardDescription>
               </CardHeader>
-              <CardContent className="pt-6">
-                <Tabs defaultValue="internal-graph" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="internal-graph">Internal Network</TabsTrigger>
-                    <TabsTrigger value="internal-map">Internal Map</TabsTrigger>
-                    <TabsTrigger value="external-graph">Full Network</TabsTrigger>
-                    <TabsTrigger value="external-map">Full Map</TabsTrigger>
+              <CardContent>
+                <div className="space-y-4">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="block w-full text-sm text-slate-400
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-purple-600 file:text-white
+                      hover:file:bg-purple-700
+                      file:cursor-pointer cursor-pointer"
+                  />
+                  
+                  {files.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-white font-medium">Selected Files ({files.length})</h4>
+                      {files.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                          <span className="text-slate-300 text-sm">{file.name}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeFile(index)}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <Button 
+                    onClick={processNetworkAnalysis}
+                    disabled={files.length === 0 || isProcessing}
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                  >
+                    {isProcessing ? "Analyzing Network..." : `Analyze ${files.length} File(s)`}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Network Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-4 text-center">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-blue-400" />
+                  <div className="text-2xl font-bold text-white">{networkAnalysis.statistics.totalNodes}</div>
+                  <div className="text-sm text-slate-400">Total Participants</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-4 text-center">
+                  <Crown className="h-8 w-8 mx-auto mb-2 text-red-400" />
+                  <div className="text-2xl font-bold text-white">{networkAnalysis.kingpins.length}</div>
+                  <div className="text-sm text-slate-400">Kingpins</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-4 text-center">
+                  <Layers className="h-8 w-8 mx-auto mb-2 text-orange-400" />
+                  <div className="text-2xl font-bold text-white">{networkAnalysis.middlemen.length}</div>
+                  <div className="text-sm text-slate-400">Middlemen</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-4 text-center">
+                  <TrendingUp className="h-8 w-8 mx-auto mb-2 text-green-400" />
+                  <div className="text-2xl font-bold text-white">{networkAnalysis.peddlers.length}</div>
+                  <div className="text-sm text-slate-400">Peddlers</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Network Visualization and Analysis */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-white">Network Visualization</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Interactive network map showing relationships and participant roles
+                  </CardDescription>
+                </div>
+                <Button onClick={resetAnalysis} variant="outline" className="border-slate-600 text-slate-300">
+                  New Analysis
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Tabs defaultValue="map" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 bg-slate-700">
+                    <TabsTrigger value="map" className="text-slate-300">Network Map</TabsTrigger>
+                    <TabsTrigger value="participants" className="text-slate-300">Participants</TabsTrigger>
+                    <TabsTrigger value="common" className="text-slate-300">Common Contacts</TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="internal-graph" className="mt-6">
-                    <NetworkGraphView 
-                      data={analysisResult.internalNetwork}
-                      title="Internal CDR Network"
-                      description="Connections between CDR holders only"
+                  <TabsContent value="map" className="h-96">
+                    <NetworkMap 
+                      networkNodes={networkAnalysis.nodes} 
+                      networkEdges={networkAnalysis.edges} 
                     />
                   </TabsContent>
                   
-                  <TabsContent value="internal-map" className="mt-6">
-                    <LocationMapView
-                      data={analysisResult.internalNetwork}
-                      title="Internal Network Location Map"
-                    />
+                  <TabsContent value="participants" className="p-6">
+                    <div className="space-y-6">
+                      {networkAnalysis.kingpins.length > 0 && (
+                        <div>
+                          <h3 className="text-white font-semibold mb-3 flex items-center">
+                            <Crown className="h-4 w-4 mr-2 text-red-400" />
+                            Kingpins ({networkAnalysis.kingpins.length})
+                          </h3>
+                          <div className="grid gap-3">
+                            {networkAnalysis.kingpins.map(node => (
+                              <div key={node.id} className="p-3 bg-red-900/20 border border-red-800 rounded-lg">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <div className="text-white font-medium">{node.label}</div>
+                                    <div className="text-sm text-slate-400">
+                                      {node.totalCalls} calls • {Math.round(node.totalDuration / 60)} min • {node.uniqueContacts} contacts
+                                    </div>
+                                  </div>
+                                  <Badge variant="destructive">Kingpin</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {networkAnalysis.middlemen.length > 0 && (
+                        <div>
+                          <h3 className="text-white font-semibold mb-3 flex items-center">
+                            <Layers className="h-4 w-4 mr-2 text-orange-400" />
+                            Middlemen ({networkAnalysis.middlemen.length})
+                          </h3>
+                          <div className="grid gap-3">
+                            {networkAnalysis.middlemen.map(node => (
+                              <div key={node.id} className="p-3 bg-orange-900/20 border border-orange-800 rounded-lg">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <div className="text-white font-medium">{node.label}</div>
+                                    <div className="text-sm text-slate-400">
+                                      {node.totalCalls} calls • {Math.round(node.totalDuration / 60)} min • {node.uniqueContacts} contacts
+                                    </div>
+                                  </div>
+                                  <Badge className="bg-orange-600">Middleman</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {networkAnalysis.peddlers.length > 0 && (
+                        <div>
+                          <h3 className="text-white font-semibold mb-3 flex items-center">
+                            <TrendingUp className="h-4 w-4 mr-2 text-green-400" />
+                            Peddlers ({networkAnalysis.peddlers.length})
+                          </h3>
+                          <div className="grid gap-3">
+                            {networkAnalysis.peddlers.map(node => (
+                              <div key={node.id} className="p-3 bg-green-900/20 border border-green-800 rounded-lg">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <div className="text-white font-medium">{node.label}</div>
+                                    <div className="text-sm text-slate-400">
+                                      {node.totalCalls} calls • {Math.round(node.totalDuration / 60)} min • {node.uniqueContacts} contacts
+                                    </div>
+                                  </div>
+                                  <Badge variant="secondary">Peddler</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </TabsContent>
                   
-                  <TabsContent value="external-graph" className="mt-6">
-                    <NetworkGraphView 
-                      data={analysisResult.fullNetwork}
-                      title="Complete Criminal Network"
-                      description="All connections including external contacts"
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="external-map" className="mt-6">
-                    <LocationMapView
-                      data={analysisResult.fullNetwork}
-                      title="Complete Network Location Map"
-                    />
+                  <TabsContent value="common" className="p-6">
+                    <div>
+                      <h3 className="text-white font-semibold mb-3">
+                        Common Contacts ({networkAnalysis.commonContacts.length})
+                      </h3>
+                      <div className="text-sm text-slate-400 mb-4">
+                        Phone numbers that appear in multiple CDR files
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {networkAnalysis.commonContacts.map((contact, index) => (
+                          <div key={index} className="p-2 bg-slate-700/30 rounded text-slate-300 text-sm">
+                            {contact}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
