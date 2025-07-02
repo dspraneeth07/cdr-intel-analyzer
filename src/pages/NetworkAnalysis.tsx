@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import NetworkGraphView from '@/components/NetworkGraphView';
 import LocationMapView from '@/components/LocationMapView';
@@ -16,11 +17,13 @@ const NetworkAnalysis = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<NetworkAnalysisResult | null>(null);
+  const [error, setError] = useState<string>('');
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files || []);
     setFiles(prev => [...prev, ...uploadedFiles]);
+    setError(''); // Clear any previous errors
     toast({
       title: "Files Added",
       description: `${uploadedFiles.length} CDR files added for analysis`,
@@ -42,10 +45,18 @@ const NetworkAnalysis = () => {
     }
 
     setIsAnalyzing(true);
+    setError('');
+    setAnalysisResult(null);
+
     try {
       console.log('Starting network analysis for', files.length, 'files');
       const result = await analyzeNetworkFromCDRs(files);
-      console.log('Analysis result:', result);
+      console.log('Analysis result received:', result);
+      
+      if (!result || !result.internalNetwork || !result.fullNetwork) {
+        throw new Error('Invalid analysis result received');
+      }
+
       setAnalysisResult(result);
       toast({
         title: "Analysis Complete",
@@ -53,9 +64,11 @@ const NetworkAnalysis = () => {
       });
     } catch (error) {
       console.error('Analysis error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setError(errorMessage);
       toast({
         title: "Analysis Failed",
-        description: "Failed to analyze CDR network. Please check file formats.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -163,7 +176,7 @@ const NetworkAnalysis = () => {
                 {isAnalyzing ? (
                   <>
                     <Activity className="h-5 w-5 mr-2 animate-spin" />
-                    Analyzing Network...
+                    Analyzing Network... (This may take a few minutes)
                   </>
                 ) : (
                   <>
@@ -172,6 +185,24 @@ const NetworkAnalysis = () => {
                   </>
                 )}
               </Button>
+
+              {/* Error Display */}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Loading Status */}
+              {isAnalyzing && (
+                <Alert>
+                  <AlertDescription>
+                    Processing CDR files... This may take several minutes depending on the size of your data.
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
 
