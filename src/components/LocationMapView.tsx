@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -117,13 +116,13 @@ const LocationMapView: React.FC<LocationMapViewProps> = ({ data, mapboxToken, ti
             const targetNode = data.nodes.find(n => n.id === edge.target)!;
             
             return {
-              type: 'Feature',
+              type: "Feature" as const,
               properties: {
                 callCount: edge.callCount,
                 weight: edge.weight
               },
               geometry: {
-                type: 'LineString',
+                type: "LineString" as const,
                 coordinates: [
                   [sourceNode.location!.lng, sourceNode.location!.lat],
                   [targetNode.location!.lng, targetNode.location!.lat]

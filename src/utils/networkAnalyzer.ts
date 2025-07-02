@@ -1,4 +1,3 @@
-
 import Papa from 'papaparse';
 import { processCDRData } from './cdrProcessor';
 
@@ -30,6 +29,7 @@ export interface NetworkNode {
     imei?: string[];
     imsi?: string[];
     cellIds?: string[];
+    influenceScore?: number;
   };
 }
 

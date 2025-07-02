@@ -180,7 +180,7 @@ const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({ data, title, descri
                 }
               }}
             />
-            <Background variant="dots" gap={12} size={1} />
+            <Background variant="cross" gap={12} size={1} />
             <Panel position="top-right">
               <div className="bg-white p-2 rounded shadow text-xs">
                 <div>Network Density: {(data.statistics.networkDensity * 100).toFixed(1)}%</div>
